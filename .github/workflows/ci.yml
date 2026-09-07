@@ -60,10 +60,17 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm install -g @anthropic-ai/claude-code
+      - name: Trust workspace for Claude Code
+        env:
+          WS: ${{ github.workspace }}
+        run: printf '{"projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$WS" > "$HOME/.claude.json"
       - name: AI failure triage
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          ANTHROPIC_DEFAULT_SONNET_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_SONNET_MODEL }}
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_HAIKU_MODEL }}
+          ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_OPUS_MODEL }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail

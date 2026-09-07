@@ -16,10 +16,14 @@ concurrency:
 jobs:
   review:
     if: >-
-      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
-       contains(github.event.comment.body, '@claude'))
+       contains(github.event.comment.body, '@claude') &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -36,6 +40,11 @@ jobs:
 
       - run: npm install -g @anthropic-ai/claude-code
 
+      - name: Trust workspace for Claude Code
+        env:
+          WS: ${{ github.workspace }}
+        run: printf '{"projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$WS" > "$HOME/.claude.json"
+
       - name: Build the review prompt
         run: |
           set -euo pipefail
@@ -51,10 +60,21 @@ jobs:
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          ANTHROPIC_DEFAULT_SONNET_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_SONNET_MODEL }}
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_HAIKU_MODEL }}
+          ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_OPUS_MODEL }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ]; then
             echo "⚠️ AI review skipped: ANTHROPIC_AUTH_TOKEN secret not set" > review.md
+            exit 0
+          fi
+          # Prompt-injection guard: never feed fork-authored content to the agent,
+          # regardless of who triggered the run (defends the @claude comment path too).
+          HEAD_OWNER=$(gh pr view "$PR_NUMBER" --json headRepositoryOwner -q .headRepositoryOwner.login)
+          if [ "$HEAD_OWNER" != "$OWNER" ]; then
+            echo "⚠️ AI review skipped: PR #$PR_NUMBER originates from fork $HEAD_OWNER — refusing to run the agent on untrusted content." > review.md
             exit 0
           fi
           claude -p "$(cat prompt.txt)" \
