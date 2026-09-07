@@ -40,6 +40,11 @@ jobs:
 
       - run: npm install -g @anthropic-ai/claude-code
 
+      - name: Trust workspace for Claude Code
+        env:
+          WS: ${{ github.workspace }}
+        run: printf '{"projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$WS" > "$HOME/.claude.json"
+
       - name: Build the review prompt
         run: |
           set -euo pipefail
