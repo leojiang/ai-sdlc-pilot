@@ -72,10 +72,16 @@ jobs:
           ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_HAIKU_MODEL }}
           ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_OPUS_MODEL }}
           RUN_ID: ${{ github.run_id }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ]; then
             echo "⚠️ AI triage skipped: ANTHROPIC_AUTH_TOKEN secret not set"; exit 0
+          fi
+          # Same prompt-injection guard as ai-review.yml: never run the agent on fork content.
+          HEAD_OWNER=$(gh pr view "$PR_NUMBER" --json headRepositoryOwner -q .headRepositoryOwner.login)
+          if [ "$HEAD_OWNER" != "$OWNER" ]; then
+            echo "⚠️ AI triage skipped: PR #$PR_NUMBER originates from fork $HEAD_OWNER"; exit 0
           fi
           gh run view "$RUN_ID" --log-failed > failed-logs.txt || true
           claude -p "CI failed on PR #$PR_NUMBER. Failed-job logs are in failed-logs.txt. Classify the failure: real regression vs flaky test vs environment/config problem. Identify the most likely responsible change and the fix. Output concise markdown: classification, evidence, recommended next action. Write to stdout." \
