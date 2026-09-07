@@ -1,0 +1,77 @@
+name: CI
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - run: make bootstrap
+      - run: make test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: |
+            backend/target/site/jacoco/
+            frontend/coverage/
+          if-no-files-found: ignore
+
+  traceability:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: PR must reference a story issue
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          BODY=$(gh pr view "$PR" --json body -q .body)
+          echo "$BODY" | grep -qE '#[0-9]+' || {
+            echo "::error::PR body must reference a story issue (e.g. 'Closes #1')"; exit 1; }
+
+  triage:
+    needs: [test]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install -g @anthropic-ai/claude-code
+      - name: AI failure triage
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ]; then
+            echo "⚠️ AI triage skipped: ANTHROPIC_AUTH_TOKEN secret not set"; exit 0
+          fi
+          gh run view "$RUN_ID" --log-failed > failed-logs.txt || true
+          claude -p "CI failed on PR #$PR_NUMBER. Failed-job logs are in failed-logs.txt. Classify the failure: real regression vs flaky test vs environment/config problem. Identify the most likely responsible change and the fix. Output concise markdown: classification, evidence, recommended next action. Write to stdout." \
+            --allowedTools "Read" "Grep" "Bash(gh *)" \
+            --max-turns 15 > triage.md
+          gh pr comment "$PR_NUMBER" --body-file triage.md

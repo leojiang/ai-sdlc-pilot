@@ -1,0 +1,5 @@
+# These owners must review changes in the given paths.
+# Solo pilot: everything goes to leojiang. Add teammates per area as the team grows, e.g.:
+# /backend/ @leojiang @backend-dev
+# /frontend/ @leojiang @flutter-dev
+* @leojiang

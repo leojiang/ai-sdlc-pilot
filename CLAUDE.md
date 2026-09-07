@@ -8,6 +8,9 @@ Pilot repository for our AI-augmented software development lifecycle. Currently 
 - Every change starts as a GitHub Issue (story).
 - Stories labeled `ai-draft` were drafted by AI and **require human review** before being worked on.
 - The AI never: transitions issue state, assigns people, removes the `ai-draft` label, or closes issues.
+- Branches: `story/<issue#>-short-slug`. PRs to `main` only — no direct pushes.
+- A PR merges only when CI (lint/test/traceability) is green, AI review threads are resolved,
+  and a human approves. PR body must reference the issue ("Closes #N").
 
 ### Story template (required — used by /story-draft)
 Every story contains these sections:
@@ -20,6 +23,8 @@ Every story contains these sections:
 - **Testability notes** — risk areas the test plan should focus on
 
 ### Commands
+- `make bootstrap` — install dependencies and git hooks
+- `make lint` / `make test` — must pass locally before pushing
 - `gh issue list --state all` — see the backlog
 - `gh issue view <n>` — read a story
 
