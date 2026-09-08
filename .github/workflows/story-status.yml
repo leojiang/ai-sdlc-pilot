@@ -7,7 +7,6 @@ permissions:
   contents: read
 
 env:
-  OWNER: leojiang
   PROJECT_TITLE: SDLC Pilot
   STATUS_FIELD: Status
   TARGET_STATUS: In progress
@@ -20,6 +19,7 @@ jobs:
       - name: Move story item to In progress
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
@@ -29,7 +29,7 @@ jobs:
           if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
             echo "Branch '$GITHUB_REF_NAME' has no leading issue number — skipping"; exit 0
           fi
-          # Resolve project, Status field, target option, and the issue's board item
+          # Resolve project, Status field, and target option
           META=$(gh api graphql -f query='
             query($login: String!) {
               user(login: $login) {
@@ -37,7 +37,6 @@ jobs:
                   nodes {
                     id title
                     fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } }
-                    items(first: 100) { nodes { id content { ... on Issue { number } } } }
                   }
                 }
               }
@@ -48,7 +47,40 @@ jobs:
           if [ -z "$PROJ" ] || [ "$PROJ" = "null" ] || [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
             echo "::error::project/field/option not found (title='$PROJECT_TITLE' field='$STATUS_FIELD' status='$TARGET_STATUS')"; exit 1
           fi
-          ITEM=$(jq -r --arg t "$PROJECT_TITLE" --argjson n "$NUM" '.data.user.projectV2.nodes[] | select(.title == $t) | .items.nodes[]? | select((.content.number? // -1) == $n) | .id' <<<"$META")
+          # Find the issue's board item across ALL pages (pagination-safe)
+          ITEM=""
+          CURSOR=""
+          while :; do
+            if [ -n "$CURSOR" ]; then
+              PAGE=$(gh api graphql -f query='
+                query($id: ID!, $c: String!) {
+                  node(id: $id) {
+                    ... on ProjectV2 {
+                      items(first: 100, after: $c) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes { id content { ... on Issue { number } } }
+                      }
+                    }
+                  }
+                }' -f id="$PROJ" -f c="$CURSOR")
+            else
+              PAGE=$(gh api graphql -f query='
+                query($id: ID!) {
+                  node(id: $id) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes { id content { ... on Issue { number } } }
+                      }
+                    }
+                  }
+                }' -f id="$PROJ")
+            fi
+            ITEM=$(jq -r --argjson n "$NUM" '.data.node.items.nodes[]? | select((.content.number? // -1) == $n) | .id' <<<"$PAGE")
+            if [ -n "$ITEM" ] && [ "$ITEM" != "null" ]; then break; fi
+            if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$PAGE")" != "true" ]; then break; fi
+            CURSOR=$(jq -r '.data.node.items.pageInfo.endCursor' <<<"$PAGE")
+          done
           if [ -z "$ITEM" ] || [ "$ITEM" = "null" ]; then
             CONTENT=$(gh issue view "$NUM" -R "$GITHUB_REPOSITORY" --json id -q .id)
             ITEM=$(gh api graphql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
