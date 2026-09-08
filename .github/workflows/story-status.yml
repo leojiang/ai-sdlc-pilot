@@ -29,16 +29,17 @@ jobs:
           if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
             echo "Branch '$GITHUB_REF_NAME' has no leading issue number — skipping"; exit 0
           fi
-          # Never downgrade: if a PR is already open for this branch, the card is In review
-          OPEN_PRS=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq 'length')
+          # Never downgrade: if a non-draft PR is already open for this branch, the
+          # card is In review (draft PRs don't freeze the branch's In-progress moves)
+          OPEN_PRS=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number,isDraft --jq '[.[] | select(.isDraft == false)] | length')
           if [ "$OPEN_PRS" -gt 0 ]; then
-            echo "an open PR already exists for '$GITHUB_REF_NAME' — leaving status untouched"; exit 0
+            echo "a non-draft PR already exists for '$GITHUB_REF_NAME' — leaving status untouched"; exit 0
           fi
           # Resolve project, Status field, and target option
           META=$(gh api graphql -f query='
             query($login: String!) {
               user(login: $login) {
-                projectV2(first: 20) {
+                projectsV2(first: 20) {
                   nodes {
                     id title
                     fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } }
@@ -46,9 +47,9 @@ jobs:
                 }
               }
             }' -f login="$OWNER")
-          PROJ=$(jq -r --arg t "$PROJECT_TITLE" '.data.user.projectV2.nodes[] | select(.title == $t) | .id' <<<"$META")
-          FIELD=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .id' <<<"$META")
-          OPTION=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" --arg o "$TARGET_STATUS" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$META")
+          PROJ=$(jq -r --arg t "$PROJECT_TITLE" '.data.user.projectsV2.nodes[] | select(.title == $t) | .id' <<<"$META")
+          FIELD=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" '.data.user.projectsV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .id' <<<"$META")
+          OPTION=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" --arg o "$TARGET_STATUS" '.data.user.projectsV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$META")
           if [ -z "$PROJ" ] || [ "$PROJ" = "null" ] || [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
             echo "::error::project/field/option not found (title='$PROJECT_TITLE' field='$STATUS_FIELD' status='$TARGET_STATUS')"; exit 1
           fi
@@ -63,7 +64,7 @@ jobs:
                     ... on ProjectV2 {
                       items(first: 100, after: $c) {
                         pageInfo { hasNextPage endCursor }
-                        nodes { id content { ... on Issue { number } } }
+                        nodes { id fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name } } } content { ... on Issue { number repository { nameWithOwner } } } }
                       }
                     }
                   }
@@ -75,17 +76,25 @@ jobs:
                     ... on ProjectV2 {
                       items(first: 100) {
                         pageInfo { hasNextPage endCursor }
-                        nodes { id content { ... on Issue { number } } }
+                        nodes { id fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name } } } content { ... on Issue { number repository { nameWithOwner } } } }
                       }
                     }
                   }
                 }' -f id="$PROJ")
             fi
-            ITEM=$(jq -r --argjson n "$NUM" '.data.node.items.nodes[]? | select((.content.number? // -1) == $n) | .id' <<<"$PAGE")
-            if [ -n "$ITEM" ] && [ "$ITEM" != "null" ]; then break; fi
+            MATCH=$(jq -r --argjson n "$NUM" --arg repo "$GITHUB_REPOSITORY" '.data.node.items.nodes[]? | select((.content.number? // -1) == $n and (.content.repository.nameWithOwner? // "") == $repo) | "\(.id) \([.fieldValues.nodes[]? | .name] | join("|"))"' <<<"$PAGE")
+            if [ -n "$MATCH" ] && [ "$MATCH" != "null" ]; then ITEM="${MATCH%% *}"; CUR="${MATCH#* }"; break; fi
             if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$PAGE")" != "true" ]; then break; fi
             CURSOR=$(jq -r '.data.node.items.pageInfo.endCursor' <<<"$PAGE")
           done
+          # Status-based never-downgrade: whatever the PR state (draft conversion,
+          # review lag), a card at In review or Done stays put
+          if [ -n "$ITEM" ] && [ "$ITEM" != "null" ]; then
+            case "$CUR" in
+              *"In review"*|*"Done"*)
+                echo "issue #$NUM is already '$CUR' — not downgrading to $TARGET_STATUS"; exit 0;;
+            esac
+          fi
           if [ -z "$ITEM" ] || [ "$ITEM" = "null" ]; then
             CONTENT=$(gh issue view "$NUM" -R "$GITHUB_REPOSITORY" --json id -q .id)
             ITEM=$(gh api graphql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
