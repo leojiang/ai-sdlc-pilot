@@ -1,0 +1,57 @@
+name: Board add
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: read
+
+env:
+  OWNER: leojiang
+  PROJECT_TITLE: SDLC Pilot
+  STATUS_FIELD: Status
+  INITIAL_STATUS: Backlog
+
+jobs:
+  add-story-to-backlog:
+    # Only story issues belong on the board; label applied on creation or later
+    if: contains(github.event.issue.labels.*.name, 'story')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Add story issue to board at Backlog
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "⚠️ PROJECT_TOKEN secret not set — issue #$ISSUE_NUMBER not added to board"; exit 0
+          fi
+          META=$(gh api graphql -f query='
+            query($login: String!) {
+              user(login: $login) {
+                projectV2(first: 20) {
+                  nodes {
+                    id title
+                    fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } }
+                    items(first: 100) { nodes { id content { ... on Issue { number } } } }
+                  }
+                }
+              }
+            }' -f login="$OWNER")
+          PROJ=$(jq -r --arg t "$PROJECT_TITLE" '.data.user.projectV2.nodes[] | select(.title == $t) | .id' <<<"$META")
+          FIELD=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .id' <<<"$META")
+          OPTION=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" --arg o "$INITIAL_STATUS" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$META")
+          if [ -z "$PROJ" ] || [ "$PROJ" = "null" ] || [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
+            echo "::error::project/field/option not found (title='$PROJECT_TITLE' field='$STATUS_FIELD' status='$INITIAL_STATUS')"; exit 1
+          fi
+          # Idempotency: never add an item that's already on the board
+          if jq -e --arg t "$PROJECT_TITLE" --argjson n "$ISSUE_NUMBER" \
+            '[.data.user.projectV2.nodes[] | select(.title == $t)][0].items.nodes[]? | select((.content.number? // -1) == $n)' <<<"$META" > /dev/null; then
+            echo "issue #$ISSUE_NUMBER already on the board — nothing to do"; exit 0
+          fi
+          CONTENT=$(gh issue view "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --json id -q .id)
+          ITEM=$(gh api graphql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
+          gh api graphql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$ITEM" -f f="$FIELD" -f o="$OPTION" > /dev/null
+          echo "✅ Issue #$ISSUE_NUMBER added to '$PROJECT_TITLE' at $INITIAL_STATUS"
