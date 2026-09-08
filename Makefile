@@ -9,7 +9,7 @@
 .PHONY: check-pub-host
 check-pub-host:
 	@if [ -f frontend/pubspec.lock ]; then \
-	  LOCKED=$$(sed -n 's/^ *url: "\(.*\)"$$/\1/p' frontend/pubspec.lock | head -1); \
+	  LOCKED=$$(awk '/^ *url:/ {u=$$0} /^ *source: hosted/ {sub(/^ *url: "/,"",u); sub(/"$$/,"",u); print u; exit}' frontend/pubspec.lock); \
 	  EFFECTIVE="$${PUB_HOSTED_URL:-https://pub.dev}"; \
 	  if [ -n "$$LOCKED" ] && [ "$$EFFECTIVE" != "$$LOCKED" ]; then \
 	    echo "ERROR: frontend/pubspec.lock is resolved against $$LOCKED but the local"; \
@@ -20,6 +20,7 @@ check-pub-host:
 	fi
 
 bootstrap:
+	@$(MAKE) --no-print-directory check-pub-host
 	@if [ -d backend ]; then cd backend && ./mvnw -q -DskipTests dependency:go-offline compile; fi
 	@if [ -d frontend ]; then $(MAKE) --no-print-directory check-pub-host && cd frontend && flutter pub get; fi
 	@command -v pre-commit >/dev/null && pre-commit install || true

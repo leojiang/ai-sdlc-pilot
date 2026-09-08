@@ -138,7 +138,7 @@ void main() {
     );
 
     await tester.pump(); // start the fetch; spinner showing
-    await tester.pump(const Duration(seconds: 11)); // timeout fires
+    await tester.pump(healthFetchTimeout + const Duration(seconds: 1)); // timeout fires
     await tester.pumpAndSettle();
 
     expect(find.text('Cannot reach the backend.'), findsOneWidget);
