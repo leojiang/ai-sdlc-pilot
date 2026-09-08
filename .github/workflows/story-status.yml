@@ -106,6 +106,14 @@ jobs:
             .data.repository.issue.projectItems.nodes[]?
             | select(.project.title == $t)
             | "\(.id)\t\([.fieldValues.nodes[]? | select(.field.name == "Status") | .name] | .[0] // "-")"' <<<"$RES")
+          # Symmetric merge-adjacent guard (cf. story-review): re-check the issue
+          # before ANY write — an in-flight run whose reads predate a merge must
+          # not write (or add a card) over story-done's fresh Done. gh --json state
+          # is uppercase OPEN (GraphQL-style), unlike webhook payloads.
+          ISSUE_STATE=$(gh issue view "$NUM" -R "$GITHUB_REPOSITORY" --json state -q .state)
+          if [ "$ISSUE_STATE" != "OPEN" ]; then
+            echo "issue #$NUM closed while this run was in flight — leaving the board to story-done"; exit 0
+          fi
           if [ -n "$ITEMS" ]; then
             # Status-based never-downgrade: if ANY card for this story sits at
             # In review or Done (PR draft conversions, review lag), leave all alone
