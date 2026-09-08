@@ -120,9 +120,14 @@ jobs:
             if awk -F'\t' '$2 == "In review" || $2 == "Done"' <<<"$ITEMS" | grep -q .; then
               echo "issue #$NUM already has a card at In review/Done — not downgrading to $TARGET_STATUS"; exit 0
             fi
+            # Ready gate: implementation starts only on human-promoted stories.
+            # A Backlog card has not been reviewed — require promotion first.
+            if awk -F'\t' '$2 == "Backlog"' <<<"$ITEMS" | grep -q .; then
+              echo "issue #$NUM is still at Backlog — review the story and promote it to Ready before implementation; card left at Backlog"; exit 0
+            fi
           else
-            CID=$(jq -r '.data.repository.issue.id' <<<"$RES")
-            ITEMS=$(gql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CID" | jq -r '.data.addProjectV2ItemById.item.id + "\t-"')
+            # Ready gate: no board card means the story was never human-promoted
+            echo "issue #$NUM has no board card — add it to the SDLC Pilot board and promote it to Ready before implementation"; exit 0
           fi
           # Update every matching item (guards against historical double-adds)
           while IFS=$'\t' read -r ITEM _CUR; do
