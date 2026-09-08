@@ -25,7 +25,7 @@ Status moves are automatic consequences of verifiable events — the only manual
 - **Ready** — a human promotes the story after review
 - **In progress** — first push of the `story/<issue#>-*` branch (`.github/workflows/story-status.yml`) — Ready stories only: a Backlog card is refused until a human promotes it
 - **In review** — a non-draft PR closes the story (on open, or on a body edit that adds the closing ref — `.github/workflows/story-review.yml`)
-- **Done** — a PR closing the story merges (`.github/workflows/story-done.yml`); the issue auto-closes (GitHub built-in)
+- **Done** — a PR closing the story merges (`.github/workflows/story-done.yml`); the issue auto-closes (GitHub built-in). A story closed as completed without a merge is healed to Done by the next story-done run — closed-as-completed means Done, however it closed.
 
 ### Definition of Done
 A story is done when its PR merges, and all of the following held at merge time:

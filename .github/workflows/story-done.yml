@@ -6,11 +6,13 @@ on:
 permissions:
   contents: read
 
-# Global serialization: per-issue grouping is impossible from PR events, and two
-# same-window merges of PRs both closing an unboarded story would double-add its
-# card. story-done runs are rare and fast — a single global group closes the race.
+# Global serialization, scoped by merge outcome: per-issue grouping is impossible
+# from PR events, and two same-window merges would double-add an unboarded card.
+# Grouping by `merged` matters because the group applies BEFORE the job-level if —
+# a non-merge close queued in the same group would otherwise cancel a pending
+# merge run and then skip instantly, never reaching the heal sweep.
 concurrency:
-  group: story-done-board
+  group: story-done-board-${{ github.event.pull_request.merged }}
   cancel-in-progress: false
 
 env:
@@ -119,7 +121,10 @@ jobs:
           # pending run can be CANCELLED (grey, not red), leaving its closed
           # issues' cards below Done with no other healer. Every surviving run
           # therefore also repairs: any board item whose issue is CLOSED+COMPLETED
-          # from this repo and not yet Done goes to Done. Idempotent and terminal.
+          # from this repo and not yet Done goes to Done. Policy, not just race
+          # recovery: closed-as-completed means Done however it closed — including
+          # maintainer closes without any PR merge (see CLAUDE.md lifecycle).
+          # Idempotent and terminal.
           HEAL_CURSOR=""
           while :; do
             HPAGE=$(gql -f query='
@@ -139,13 +144,13 @@ jobs:
               [ -n "$HID" ] || continue
               gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$HID" -f f="$FIELD" -f o="$OPTION" > /dev/null
               echo "🩹 heal: closed story's card → $TARGET_STATUS (recovered from a superseded/cancelled run)"
-            done < <(jq -r --arg repo "$GITHUB_REPOSITORY" '
+            done < <(jq -r --arg repo "$GITHUB_REPOSITORY" --arg f "$STATUS_FIELD" '
               .data.node.items.nodes[]?
               | select((.content.state? // "") == "CLOSED")
               | select((.content.stateReason? // "") == "COMPLETED")
               | select((.content.repository.nameWithOwner? // "") == $repo)
               | select(any(.content.labels.nodes[]?; . == "story"))
-              | select(([.fieldValues.nodes[]? | select(.field.name == "Status") | .name] | first) != "Done")
+              | select(([.fieldValues.nodes[]? | select(.field.name == $f) | .name] | first) != "Done")
               | "\(.id)\theal"' <<<"$HPAGE")
             if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$HPAGE")" != "true" ]; then break; fi
             HEAL_CURSOR=$(jq -r '.data.node.items.pageInfo.endCursor' <<<"$HPAGE")
