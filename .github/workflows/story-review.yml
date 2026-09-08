@@ -48,7 +48,7 @@ jobs:
                   }
                 }
               }
-            }' -f o="$OWNER" -f r="$REPO_NAME" -f n="$PR_NUMBER")
+            }' -f o="$OWNER" -f r="$REPO_NAME" -F n="$PR_NUMBER")
           COUNT=$(jq -r '.data.repository.pullRequest.closingIssuesReferences.nodes | length' <<<"$RES")
           if [ -z "$COUNT" ] || [ "$COUNT" = "null" ] || [ "$COUNT" = "0" ]; then
             echo "PR #$PR_NUMBER closes no issues — skipping"; exit 0
