@@ -44,7 +44,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { flutter-version: 3.41.9, channel: stable }
       - run: make bootstrap
-      - run: make test
+      - run: make test-coverage
+      - name: Wrapper verify (full lifecycle incl. jar packaging)
+        run: cd backend && ./mvnw -q verify
       - name: Repo hygiene — no build artifacts committed or created
         run: |
           set -euo pipefail

@@ -33,6 +33,7 @@ Monorepo with two apps scaffolded side by side:
 |---|---|---|
 | JDK | 17 or newer | The only backend requirement — the Maven wrapper downloads Maven itself. Older JDKs fail the build with an explicit enforcer message. |
 | Flutter SDK | stable (≥ 3.41) | **Run `flutter doctor` first** and fix anything red before continuing. Dart constraint is enforced by `frontend/pubspec.yaml`. |
+| `PUB_HOSTED_URL` | `https://pub.flutter-io.cn` | **Required.** The team's pub host; `frontend/pubspec.lock` is resolved against it. Without it, `pub get` rewrites every lockfile entry. Set it in your shell profile. |
 | git, GNU make | any recent | |
 
 ### First-time setup
@@ -40,8 +41,12 @@ Monorepo with two apps scaffolded side by side:
 ```bash
 git clone <this-repo>
 cd ai-sdlc-pilot
+export PUB_HOSTED_URL=https://pub.flutter-io.cn   # add to your shell profile
 make bootstrap   # backend deps (via wrapper) + frontend packages + git hooks
 ```
+
+`make bootstrap` and `make lint` fail fast with instructions if `PUB_HOSTED_URL`
+doesn't match the host the lockfile is resolved against.
 
 ### Running the backend
 

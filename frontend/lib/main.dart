@@ -125,10 +125,13 @@ class _ErrorView extends StatelessWidget {
 
 /// Fetches and validates the backend health contract (200 + status field).
 /// Throws [HealthCheckException] on any deviation so the UI shows an explicit
-/// error state instead of rendering a misleading value.
+/// error state instead of rendering a misleading value. A 10s timeout turns a
+/// hung backend into the error view rather than an endless spinner (N7).
 Future<String> fetchHealthStatus(http.Client client, Uri baseUrl) async {
   final uri = baseUrl.resolve('/actuator/health');
-  final response = await client.get(uri);
+  final response = await client
+      .get(uri)
+      .timeout(const Duration(seconds: 10));
 
   if (response.statusCode != 200) {
     throw HealthCheckException('HTTP ${response.statusCode} from $uri');

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:aisdlc_frontend/main.dart';
@@ -6,17 +7,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 /// Configurable fake HTTP client: serves [body]/[statusCode], throws on
-/// request when [throwException] is set, and records the requested URL.
+/// request when [throwException] is set, never completes when [hang] is set,
+/// and records the requested URL.
 class FakeClient extends http.BaseClient {
   FakeClient({
     this.statusCode = 200,
     this.body = '{"status":"UP"}',
     this.throwException = false,
+    this.hang = false,
   });
 
   final int statusCode;
   final String body;
   final bool throwException;
+  final bool hang;
   final List<Uri> requestedUrls = [];
 
   @override
@@ -24,6 +28,9 @@ class FakeClient extends http.BaseClient {
     requestedUrls.add(request.url);
     if (throwException) {
       throw http.ClientException('Connection refused', request.url);
+    }
+    if (hang) {
+      return Completer<http.StreamedResponse>().future; // never completes
     }
     return http.StreamedResponse(
       http.ByteStream.fromBytes(utf8.encode(body)),
@@ -100,5 +107,41 @@ void main() {
       fetchHealthStatus(client, Uri.parse('http://test:8080')),
       throwsA(isA<HealthCheckException>()),
     );
+  });
+
+  testWidgets('renders a non-UP status without treating it as success',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SmokeScreen(
+          client: FakeClient(body: '{"status":"DOWN"}'),
+          apiBaseUrl: Uri.parse('http://test:8080'),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Backend health: DOWN'), findsOneWidget);
+    expect(find.byIcon(Icons.error), findsOneWidget); // orange, not green check
+  });
+
+  testWidgets('shows the error state when the backend hangs (10s timeout)',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SmokeScreen(
+          client: FakeClient(hang: true),
+          apiBaseUrl: Uri.parse('http://test:8080'),
+        ),
+      ),
+    );
+
+    await tester.pump(); // start the fetch; spinner showing
+    await tester.pump(const Duration(seconds: 11)); // timeout fires
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cannot reach the backend.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
