@@ -79,7 +79,7 @@ jobs:
             query($o: String!, $r: String!, $n: Int!) {
               repository(owner: $o, name: $r) {
                 issue(number: $n) {
-                  id
+                  id state
                   projectItems(first: 50) {
                     nodes {
                       id
@@ -94,6 +94,11 @@ jobs:
             }' -f o="$OWNER" -f r="$REPO_NAME")
           if [ "$(jq -r '.data.repository.issue.id' <<<"$RES")" = "null" ]; then
             echo "::error::branch '$GITHUB_REF_NAME' references issue #$NUM, which does not exist"; exit 1
+          fi
+          # A closed story's lifecycle is complete — board automation never writes
+          # its card again, whatever a stray branch push does
+          if [ "$(jq -r '.data.repository.issue.state' <<<"$RES")" != "OPEN" ]; then
+            echo "issue #$NUM is closed — story lifecycle complete; ignoring push to '$GITHUB_REF_NAME'"; exit 0
           fi
           ITEMS=$(jq -r --arg t "$PROJECT_TITLE" '
             .data.repository.issue.projectItems.nodes[]?
