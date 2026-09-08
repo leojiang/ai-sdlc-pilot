@@ -13,6 +13,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      # Flutter is pinned (not the runner image's unpinned copy) so builds are
+      # deterministic — story #1 edge case 4.
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: 3.41.9, channel: stable }
       - run: make lint
 
   test:
@@ -21,8 +25,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: 3.41.9, channel: stable }
       - run: make bootstrap
       - run: make test
+      - name: Repo hygiene — no build artifacts committed or created
+        run: |
+          set -euo pipefail
+          # AC1: nothing under artifact/IDE dirs may be committed.
+          BAD=$(git ls-files | grep -E '(^|/)(target|build|\.gradle|\.dart_tool|\.idea|\.vscode)/|\.(iml)$' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::Committed build artifacts found:"; echo "$BAD"; exit 1
+          fi
+          # N6: a full build must leave the working tree clean (.gitignore completeness).
+          DIRTY=$(git status --porcelain)
+          if [ -n "$DIRTY" ]; then
+            echo "::error::Working tree dirty after build — .gitignore is incomplete:"; echo "$DIRTY"; exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
