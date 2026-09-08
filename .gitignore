@@ -4,3 +4,20 @@ node_modules/
 .env.*
 *.log
 /tmp
+
+# Build artifacts — no build output is ever committed (story #1 AC1).
+# Backend (Maven)
+target/
+# Gradle (kept in case the backend ever moves to Gradle)
+.gradle/
+# Frontend (Flutter/Dart)
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+coverage/
+
+# IDE folders
+.idea/
+.vscode/
+*.iml
