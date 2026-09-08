@@ -44,12 +44,20 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { flutter-version: 3.41.9, channel: stable }
       - run: make bootstrap
-      - run: make test
+      # Runs the full backend verify lifecycle once (plus JaCoCo) and the
+      # flutter suite with coverage — no separate test/verify duplication.
+      - run: make test-coverage
+      - name: Pub-host guard smoke — must fail fast with PUB_HOSTED_URL unset
+        run: |
+          if env -u PUB_HOSTED_URL make check-pub-host; then
+            echo "::error::check-pub-host did not fail with PUB_HOSTED_URL unset"; exit 1
+          fi
+          echo "guard fired as expected"
       - name: Repo hygiene — no build artifacts committed or created
         run: |
           set -euo pipefail
           # AC1: nothing under artifact/IDE dirs may be committed.
-          BAD=$(git ls-files | grep -E '(^|/)(target|build|\.gradle|\.dart_tool|\.idea|\.vscode)/|\.(iml)$' || true)
+          BAD=$(git ls-files | grep -E '(^|/)(target|build|\.gradle|\.dart_tool|\.kotlin|\.idea|\.vscode)/|\.(iml)$' || true)
           if [ -n "$BAD" ]; then
             echo "::error::Committed build artifacts found:"; echo "$BAD"; exit 1
           fi

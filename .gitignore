@@ -16,6 +16,8 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 coverage/
+# Kotlin/Gradle session data written by Android builds (frontend/android/.kotlin/)
+.kotlin/
 
 # IDE folders
 .idea/
