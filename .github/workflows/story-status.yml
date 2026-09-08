@@ -23,81 +23,95 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo "⚠️ PROJECT_TOKEN secret not set — board status not updated (see story #5)"; exit 0
+            echo "⚠️ PROJECT_TOKEN secret not set — board status not updated"; exit 0
           fi
           NUM="${GITHUB_REF_NAME#story/}"; NUM="${NUM%%-*}"
           if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
             echo "Branch '$GITHUB_REF_NAME' has no leading issue number — skipping"; exit 0
           fi
-          # Never downgrade: if a non-draft PR is already open for this branch, the
-          # card is In review (draft PRs don't freeze the branch's In-progress moves)
+          NUM=$((10#$NUM))  # normalize zero-padded numbers for --argjson/-F
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          # Fast path: a non-draft PR already open for this branch means the card
+          # is (or will be) In review — leave it alone. Drafts don't freeze moves.
           OPEN_PRS=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number,isDraft --jq '[.[] | select(.isDraft == false)] | length')
           if [ "$OPEN_PRS" -gt 0 ]; then
             echo "a non-draft PR already exists for '$GITHUB_REF_NAME' — leaving status untouched"; exit 0
           fi
-          # Resolve project, Status field, and target option
+          gql() {
+            local out
+            if ! out=$(gh api graphql "$@"); then
+              echo "::error::gh api graphql failed"; return 1
+            fi
+            if ! jq -e '(.errors // []) | length == 0' >/dev/null <<<"$out"; then
+              echo "::error::GraphQL errors: $(jq -c '.errors' <<<"$out")"; return 1
+            fi
+            printf '%s' "$out"
+          }
+          # Org-portable project lookup: organization() ERRORS (not nulls) for user
+          # logins, so probe it tolerantly first, then fall back to user()
           META=$(gh api graphql -f query='
             query($login: String!) {
-              user(login: $login) {
-                projectsV2(first: 20) {
-                  nodes {
-                    id title
-                    fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } }
+              organization(login: $login) {
+                projectsV2(first: 20) { nodes { id title fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } } } }
+              }
+            }' -f login="$OWNER" 2>/dev/null || true)
+          if ! jq -e --arg t "$PROJECT_TITLE" '[(.data.organization.projectsV2.nodes[]?) | select(.title == $t)] | length > 0' <<<"${META:-null}" >/dev/null 2>&1; then
+            META=$(gql -f query='
+              query($login: String!) {
+                user(login: $login) {
+                  projectsV2(first: 20) { nodes { id title fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } } } }
+                }
+              }' -f login="$OWNER")
+          fi
+          PNODE=$(jq -c --arg t "$PROJECT_TITLE" '[(.data.organization.projectsV2.nodes[]?), (.data.user.projectsV2.nodes[]?)] | map(select(.title == $t)) | .[0] // empty' <<<"$META")
+          if [ -z "$PNODE" ]; then
+            echo "::error::project '$PROJECT_TITLE' not found for $OWNER"; exit 1
+          fi
+          PROJ=$(jq -r '.id' <<<"$PNODE")
+          FIELD=$(jq -r --arg f "$STATUS_FIELD" '.fields.nodes[]? | select(.name == $f) | .id' <<<"$PNODE")
+          OPTION=$(jq -r --arg f "$STATUS_FIELD" --arg o "$TARGET_STATUS" '.fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$PNODE")
+          if [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
+            echo "::error::field '$STATUS_FIELD' or option '$TARGET_STATUS' not found"; exit 1
+          fi
+          # The issue's own projectItems connection: no board paging, no cross-repo
+          # collisions; carries each item's CURRENT Status (Status-scoped value).
+          RES=$(gql -F n="$NUM" -f query='
+            query($o: String!, $r: String!, $n: Int!) {
+              repository(owner: $o, name: $r) {
+                issue(number: $n) {
+                  id
+                  projectItems(first: 50) {
+                    nodes {
+                      id
+                      project { title }
+                      fieldValues(first: 10) {
+                        nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } }
+                      }
+                    }
                   }
                 }
               }
-            }' -f login="$OWNER")
-          PROJ=$(jq -r --arg t "$PROJECT_TITLE" '.data.user.projectsV2.nodes[] | select(.title == $t) | .id' <<<"$META")
-          FIELD=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" '.data.user.projectsV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .id' <<<"$META")
-          OPTION=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" --arg o "$TARGET_STATUS" '.data.user.projectsV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$META")
-          if [ -z "$PROJ" ] || [ "$PROJ" = "null" ] || [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
-            echo "::error::project/field/option not found (title='$PROJECT_TITLE' field='$STATUS_FIELD' status='$TARGET_STATUS')"; exit 1
+            }' -f o="$OWNER" -f r="$REPO_NAME")
+          if [ "$(jq -r '.data.repository.issue.id' <<<"$RES")" = "null" ]; then
+            echo "::error::branch '$GITHUB_REF_NAME' references issue #$NUM, which does not exist"; exit 1
           fi
-          # Find the issue's board item across ALL pages (pagination-safe)
-          ITEM=""
-          CURSOR=""
-          while :; do
-            if [ -n "$CURSOR" ]; then
-              PAGE=$(gh api graphql -f query='
-                query($id: ID!, $c: String!) {
-                  node(id: $id) {
-                    ... on ProjectV2 {
-                      items(first: 100, after: $c) {
-                        pageInfo { hasNextPage endCursor }
-                        nodes { id fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name } } } content { ... on Issue { number repository { nameWithOwner } } } }
-                      }
-                    }
-                  }
-                }' -f id="$PROJ" -f c="$CURSOR")
-            else
-              PAGE=$(gh api graphql -f query='
-                query($id: ID!) {
-                  node(id: $id) {
-                    ... on ProjectV2 {
-                      items(first: 100) {
-                        pageInfo { hasNextPage endCursor }
-                        nodes { id fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name } } } content { ... on Issue { number repository { nameWithOwner } } } }
-                      }
-                    }
-                  }
-                }' -f id="$PROJ")
+          ITEMS=$(jq -r --arg t "$PROJECT_TITLE" '
+            .data.repository.issue.projectItems.nodes[]?
+            | select(.project.title == $t)
+            | "\(.id)\t\([.fieldValues.nodes[]? | select(.field.name == "Status") | .name] | .[0] // "-")"' <<<"$RES")
+          if [ -n "$ITEMS" ]; then
+            # Status-based never-downgrade: if ANY card for this story sits at
+            # In review or Done (PR draft conversions, review lag), leave all alone
+            if awk -F'\t' '$2 == "In review" || $2 == "Done"' <<<"$ITEMS" | grep -q .; then
+              echo "issue #$NUM already has a card at In review/Done — not downgrading to $TARGET_STATUS"; exit 0
             fi
-            MATCH=$(jq -r --argjson n "$NUM" --arg repo "$GITHUB_REPOSITORY" '.data.node.items.nodes[]? | select((.content.number? // -1) == $n and (.content.repository.nameWithOwner? // "") == $repo) | "\(.id) \([.fieldValues.nodes[]? | .name] | join("|"))"' <<<"$PAGE")
-            if [ -n "$MATCH" ] && [ "$MATCH" != "null" ]; then ITEM="${MATCH%% *}"; CUR="${MATCH#* }"; break; fi
-            if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$PAGE")" != "true" ]; then break; fi
-            CURSOR=$(jq -r '.data.node.items.pageInfo.endCursor' <<<"$PAGE")
-          done
-          # Status-based never-downgrade: whatever the PR state (draft conversion,
-          # review lag), a card at In review or Done stays put
-          if [ -n "$ITEM" ] && [ "$ITEM" != "null" ]; then
-            case "$CUR" in
-              *"In review"*|*"Done"*)
-                echo "issue #$NUM is already '$CUR' — not downgrading to $TARGET_STATUS"; exit 0;;
-            esac
+          else
+            CID=$(jq -r '.data.repository.issue.id' <<<"$RES")
+            ITEMS=$(gql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CID" | jq -r '.data.addProjectV2ItemById.item.id + "\t-"')
           fi
-          if [ -z "$ITEM" ] || [ "$ITEM" = "null" ]; then
-            CONTENT=$(gh issue view "$NUM" -R "$GITHUB_REPOSITORY" --json id -q .id)
-            ITEM=$(gh api graphql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
-          fi
-          gh api graphql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$ITEM" -f f="$FIELD" -f o="$OPTION" > /dev/null
-          echo "✅ Story issue #$NUM → $TARGET_STATUS"
+          # Update every matching item (guards against historical double-adds)
+          while IFS=$'\t' read -r ITEM _CUR; do
+            [ -n "$ITEM" ] || continue
+            gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$ITEM" -f f="$FIELD" -f o="$OPTION" > /dev/null
+            echo "✅ Story issue #$NUM → $TARGET_STATUS"
+          done <<<"$ITEMS"

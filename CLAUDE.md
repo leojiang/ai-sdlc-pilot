@@ -27,6 +27,7 @@ A story is done when its PR merges, and all of the following held at merge time:
 3. `lint`, `test`, and `traceability` CI checks are green
 4. All AI review threads are resolved, or explicitly dismissed with a reason
 5. A human clicked merge
+6. The story's own lifecycle fired — the board shows its trail (Backlog → … → Done)
 Merge closes the issue and moves the board item to Done automatically.
 
 ### Story template (required — used by /story-draft)
