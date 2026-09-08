@@ -12,13 +12,15 @@ Pilot repository for our AI-augmented software development lifecycle. Currently 
 - Branches: `story/<issue#>-short-slug`. PRs to `main` only — no direct pushes.
 - A PR merges only when CI (lint/test/traceability) is green, AI review threads are resolved,
   and a human approves. PR body must reference the issue ("Closes #N").
+- A story's lifecycle is terminal at Done: follow-up work on a merged story gets its own
+  issue; board automation ignores pushes to a closed story's branch.
 
 ### Board lifecycle (SDLC Pilot project)
 Status moves are automatic consequences of verifiable events — the only manual move is the first one:
 - **Ready** — a human promotes the story after review
 - **In progress** — first push of the `story/<issue#>-*` branch (`.github/workflows/story-status.yml`)
 - **In review** — a non-draft PR closes the story (on open, or on a body edit that adds the closing ref — `.github/workflows/story-review.yml`)
-- **Done** — the PR merges; the issue auto-closes (GitHub built-in)
+- **Done** — a PR closing the story merges (`.github/workflows/story-done.yml`); the issue auto-closes (GitHub built-in)
 
 ### Definition of Done
 A story is done when its PR merges, and all of the following held at merge time:
