@@ -6,8 +6,13 @@ on:
 permissions:
   contents: read
 
+# Story creation fires opened + labeled events concurrently (story-draft adds two
+# labels at once); serialize per-issue so the membership check can't race itself.
+concurrency:
+  group: board-add-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 env:
-  OWNER: leojiang
   PROJECT_TITLE: SDLC Pilot
   STATUS_FIELD: Status
   INITIAL_STATUS: Backlog
@@ -22,12 +27,14 @@ jobs:
       - name: Add story issue to board at Backlog
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "⚠️ PROJECT_TOKEN secret not set — issue #$ISSUE_NUMBER not added to board"; exit 0
           fi
+          # Resolve project, Status field, and initial-status option
           META=$(gh api graphql -f query='
             query($login: String!) {
               user(login: $login) {
@@ -35,7 +42,6 @@ jobs:
                   nodes {
                     id title
                     fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } }
-                    items(first: 100) { nodes { id content { ... on Issue { number } } } }
                   }
                 }
               }
@@ -46,9 +52,43 @@ jobs:
           if [ -z "$PROJ" ] || [ "$PROJ" = "null" ] || [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
             echo "::error::project/field/option not found (title='$PROJECT_TITLE' field='$STATUS_FIELD' status='$INITIAL_STATUS')"; exit 1
           fi
-          # Idempotency: never add an item that's already on the board
-          if jq -e --arg t "$PROJECT_TITLE" --argjson n "$ISSUE_NUMBER" \
-            '[.data.user.projectV2.nodes[] | select(.title == $t)][0].items.nodes[]? | select((.content.number? // -1) == $n)' <<<"$META" > /dev/null; then
+          # Idempotency: walk ALL pages of board items — never re-add (and never
+          # reset Status on) an issue that's already on the board
+          ON_BOARD=""
+          CURSOR=""
+          while :; do
+            if [ -n "$CURSOR" ]; then
+              PAGE=$(gh api graphql -f query='
+                query($id: ID!, $c: String!) {
+                  node(id: $id) {
+                    ... on ProjectV2 {
+                      items(first: 100, after: $c) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes { content { ... on Issue { number } } }
+                      }
+                    }
+                  }
+                }' -f id="$PROJ" -f c="$CURSOR")
+            else
+              PAGE=$(gh api graphql -f query='
+                query($id: ID!) {
+                  node(id: $id) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes { content { ... on Issue { number } } }
+                      }
+                    }
+                  }
+                }' -f id="$PROJ")
+            fi
+            if jq -e --argjson n "$ISSUE_NUMBER" '.data.node.items.nodes[]? | select((.content.number? // -1) == $n)' <<<"$PAGE" > /dev/null; then
+              ON_BOARD=yes; break
+            fi
+            if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$PAGE")" != "true" ]; then break; fi
+            CURSOR=$(jq -r '.data.node.items.pageInfo.endCursor' <<<"$PAGE")
+          done
+          if [ "$ON_BOARD" = "yes" ]; then
             echo "issue #$ISSUE_NUMBER already on the board — nothing to do"; exit 0
           fi
           CONTENT=$(gh issue view "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --json id -q .id)
