@@ -90,6 +90,13 @@ jobs:
           if [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
             echo "::error::field '$STATUS_FIELD' or option '$TARGET_STATUS' not found"; exit 1
           fi
+          # Merge-adjacent guard: if this PR closed between the triggering event
+          # and now, story-done owns the card — writing In review over a fresh
+          # Done would recreate the #16 end state through a race
+          PR_STATE=$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json state -q .state)
+          if [ "$PR_STATE" != "OPEN" ]; then
+            echo "PR #$PR_NUMBER is no longer open (state: $PR_STATE) — leaving the board to story-done"; exit 0
+          fi
           MOVED=0
           # Only OPEN, story-labeled issues FROM THIS REPO: cross-repo closing refs,
           # non-story issues, and closed issues never touch this board.
