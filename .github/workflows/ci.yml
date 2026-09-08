@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           # AC1: nothing under artifact/IDE dirs may be committed.
-          BAD=$(git ls-files | grep -E '(^|/)(target|build|\.gradle|\.dart_tool|\.idea|\.vscode)/|\.(iml)$' || true)
+          BAD=$(git ls-files | grep -E '(^|/)(target|build|\.gradle|\.dart_tool|\.kotlin|\.idea|\.vscode)/|\.(iml)$' || true)
           if [ -n "$BAD" ]; then
             echo "::error::Committed build artifacts found:"; echo "$BAD"; exit 1
           fi

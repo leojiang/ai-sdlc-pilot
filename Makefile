@@ -22,7 +22,7 @@ check-pub-host:
 bootstrap:
 	@$(MAKE) --no-print-directory check-pub-host
 	@if [ -d backend ]; then cd backend && ./mvnw -q -DskipTests dependency:go-offline compile; fi
-	@if [ -d frontend ]; then $(MAKE) --no-print-directory check-pub-host && cd frontend && flutter pub get; fi
+	@if [ -d frontend ]; then cd frontend && flutter pub get; fi
 	@command -v pre-commit >/dev/null && pre-commit install || true
 
 lint:

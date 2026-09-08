@@ -45,8 +45,9 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn   # add to your shell profile
 make bootstrap   # backend deps (via wrapper) + frontend packages + git hooks
 ```
 
-`make bootstrap` and `make lint` fail fast with instructions if `PUB_HOSTED_URL`
-doesn't match the host the lockfile is resolved against.
+`make bootstrap`, `lint`, `test`, and `test-coverage` all fail fast with
+instructions if `PUB_HOSTED_URL` doesn't match the host the lockfile is
+resolved against.
 
 ### Running the backend
 
