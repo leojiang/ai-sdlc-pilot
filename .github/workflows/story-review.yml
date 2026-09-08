@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Deliberate: checkout + lookup run before the script's cheap guards —
+      # fail-loud on board misconfiguration beats silent skips (~10s per run).
       - uses: actions/checkout@v4
       - uses: ./.github/actions/project-lookup
         with:
@@ -72,7 +74,11 @@ jobs:
           if [ -z "$COUNT" ] || [ "$COUNT" = "null" ] || [ "$COUNT" = "0" ]; then
             echo "PR #$PR_NUMBER closes no issues — skipping"; exit 0
           fi
-          # Project/field/option resolved by the shared project-lookup action
+          # Project/field/option resolved by the shared project-lookup action —
+          # branch on its marker so an accidental skip can't dereference unset ids
+          if [ "${PROJECT_LOOKUP:-}" != "ok" ]; then
+            echo "⚠️ project-lookup did not resolve — skipping"; exit 0
+          fi
           PROJ="$PROJ_ID"; FIELD="$FIELD_ID"; OPTION="$OPTION_ID"
           # Merge-adjacent guard: if this PR closed between the triggering event
           # and now, story-done owns the card — writing In review over a fresh

@@ -6,10 +6,13 @@ permissions:
   contents: read
   pull-requests: write
 
-# Single source of truth for the closing-keyword pattern — used by the
-# traceability job and pinned by the conventions job's accept/reject fixtures.
-# Colon and multi-space forms verified against GitHub's parser (story #18, PR #23
-# experiment): closes: #N, Closes #N, and Closes  #N all resolve.
+# Single source of truth for the closing-keyword pattern — consumed by the
+# traceability gate and pinned by the conventions job's accept/reject fixtures.
+# (The board workflows do NOT use this regex — they consume GitHub-resolved
+# closingIssuesReferences.) Colon and multi-space forms verified against GitHub's
+# parser (story #18, PR #23 experiment): closes: #N, Closes #N, Closes  #N all
+# resolve. URL-form refs also resolve but are intentionally rejected here —
+# team convention is the "#N" form; the conventions job pins that divergence.
 env:
   CLOSING_KEYWORD_RE: '(^|[^a-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+#[0-9]+'
 
@@ -187,6 +190,10 @@ jobs:
           reject "context: see #9"
           reject "This PR discloses issues close to #12"
           reject "no reference at all"
+          # URL-form refs: GitHub's parser DOES resolve these (the board moves),
+          # but traceability intentionally requires the "#N" form — the divergence
+          # is pinned here so it stays a documented choice, not a surprise
+          reject "Closes https://github.com/foo/bar/issues/9"
           echo "✅ closing-keyword fixtures all pass"
 
   triage:

@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Deliberate: checkout + lookup run before the script's cheap guards —
+      # fail-loud on board misconfiguration beats silent skips (~10s per run).
       - uses: actions/checkout@v4
       - uses: ./.github/actions/project-lookup
         with:
@@ -80,7 +82,11 @@ jobs:
           if [ -z "$COUNT" ] || [ "$COUNT" = "null" ] || [ "$COUNT" = "0" ]; then
             echo "PR #$PR_NUMBER closes no issues — skipping"; exit 0
           fi
-          # Project/field/option resolved by the shared project-lookup action
+          # Project/field/option resolved by the shared project-lookup action —
+          # branch on its marker so an accidental skip can't dereference unset ids
+          if [ "${PROJECT_LOOKUP:-}" != "ok" ]; then
+            echo "⚠️ project-lookup did not resolve — skipping"; exit 0
+          fi
           PROJ="$PROJ_ID"; FIELD="$FIELD_ID"; OPTION="$OPTION_ID"
           MOVED=0
           # Story-labeled closing refs from THIS repo, in ANY issue state — Done is
@@ -106,3 +112,53 @@ jobs:
                           | select(.repository.nameWithOwner == $repo)
                           | select(any(.labels.nodes[].name; . == "story"))' <<<"$RES")
           if [ "$MOVED" != "1" ]; then echo "no story issues from this repo closed by this PR — board unchanged"; fi
+          # Heal sweep (closes the concurrency-group drop window): a superseded
+          # pending run can be CANCELLED (grey, not red), leaving its closed
+          # issues' cards below Done with no other healer. Every surviving run
+          # therefore also repairs: any board item whose issue is CLOSED+COMPLETED
+          # from this repo and not yet Done goes to Done. Idempotent and terminal.
+          HEAL_CURSOR=""
+          while :; do
+            if [ -n "$HEAL_CURSOR" ]; then
+              HPAGE=$(gql -f query='
+                query($id: ID!, $c: String!) {
+                  node(id: $id) { ... on ProjectV2 {
+                    items(first: 100, after: $c) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        id
+                        fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } }
+                        content { ... on Issue { state stateReason repository { nameWithOwner } } }
+                      }
+                    }
+                  } }
+                }' -f id="$PROJ" -f c="$HEAL_CURSOR")
+            else
+              HPAGE=$(gql -f query='
+                query($id: ID!) {
+                  node(id: $id) { ... on ProjectV2 {
+                    items(first: 100) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        id
+                        fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } }
+                        content { ... on Issue { state stateReason repository { nameWithOwner } } }
+                      }
+                    }
+                  } }
+                }' -f id="$PROJ")
+            fi
+            while IFS=$'\t' read -r HID _TAG; do
+              [ -n "$HID" ] || continue
+              gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$HID" -f f="$FIELD" -f o="$OPTION" > /dev/null
+              echo "🩹 heal: closed story's card → $TARGET_STATUS (recovered from a superseded/cancelled run)"
+            done < <(jq -r --arg repo "$GITHUB_REPOSITORY" '
+              .data.node.items.nodes[]?
+              | select((.content.state? // "") == "CLOSED")
+              | select((.content.stateReason? // "") == "COMPLETED")
+              | select((.content.repository.nameWithOwner? // "") == $repo)
+              | select(([.fieldValues.nodes[]? | select(.field.name == "Status") | .name] | first) != "Done")
+              | "\(.id)\theal"' <<<"$HPAGE")
+            if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$HPAGE")" != "true" ]; then break; fi
+            HEAL_CURSOR=$(jq -r '.data.node.items.pageInfo.endCursor' <<<"$HPAGE")
+          done

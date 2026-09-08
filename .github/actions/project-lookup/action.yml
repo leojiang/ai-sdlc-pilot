@@ -6,8 +6,11 @@ description: >-
   board workflows share (story #18, item 1).
 inputs:
   gh-token:
-    description: Token with project scope (plus repo read for the issue queries)
-    required: true
+    description: >-
+      Token with project scope (plus repo read for the issue queries). May be
+      empty — the action then soft-skips and exports PROJECT_LOOKUP=skipped;
+      callers branch on the marker before using the exported ids.
+    required: false
   owner:
     description: Account owning the project
     required: true
@@ -34,7 +37,9 @@ runs:
       run: |
         set -euo pipefail
         if [ -z "${GH_TOKEN:-}" ]; then
-          echo "⚠️ project-lookup: no token provided — skipping (callers' token guards exit before use)"; exit 0
+          echo "⚠️ project-lookup: no token provided — skipping"
+          echo "PROJECT_LOOKUP=skipped" >> "$GITHUB_ENV"
+          exit 0
         fi
         gql() {
           local out
@@ -76,5 +81,6 @@ runs:
           echo "PROJ_ID=$PROJ"
           echo "FIELD_ID=$FIELD"
           echo "OPTION_ID=$OPTION"
+          echo "PROJECT_LOOKUP=ok"
         } >> "$GITHUB_ENV"
         echo "✅ project-lookup: '$PROJECT_TITLE' / '$STATUS_FIELD' / '$TARGET_STATUS' resolved"
