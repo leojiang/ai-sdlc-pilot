@@ -1,7 +1,9 @@
 name: Board add
 on:
   issues:
-    types: [opened, labeled]
+    # reopened: an issue labeled story while closed, then reopened, must still
+    # board at Backlog — otherwise it can never pass the Ready gate (NOT_ON_BOARD)
+    types: [opened, labeled, reopened]
 
 permissions:
   contents: read
@@ -26,6 +28,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/project-lookup
+        with:
+          gh-token: ${{ secrets.PROJECT_TOKEN }}
+          owner: ${{ github.repository_owner }}
+          project-title: ${{ env.PROJECT_TITLE }}
+          status-field: ${{ env.STATUS_FIELD }}
+          target-status: ${{ env.INITIAL_STATUS }}
       - name: Add story issue to board at Backlog
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
@@ -47,32 +57,8 @@ jobs:
             fi
             printf '%s' "$out"
           }
-          # Org-portable project lookup: organization() ERRORS (not nulls) for user
-          # logins, so probe it tolerantly first, then fall back to user()
-          META=$(gh api graphql -f query='
-            query($login: String!) {
-              organization(login: $login) {
-                projectsV2(first: 20) { nodes { id title fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } } } }
-              }
-            }' -f login="$OWNER" 2>/dev/null || true)
-          if ! jq -e --arg t "$PROJECT_TITLE" '[(.data.organization.projectsV2.nodes[]?) | select(.title == $t)] | length > 0' <<<"${META:-null}" >/dev/null 2>&1; then
-            META=$(gql -f query='
-              query($login: String!) {
-                user(login: $login) {
-                  projectsV2(first: 20) { nodes { id title fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } } } }
-                }
-              }' -f login="$OWNER")
-          fi
-          PNODE=$(jq -c --arg t "$PROJECT_TITLE" '[(.data.organization.projectsV2.nodes[]?), (.data.user.projectsV2.nodes[]?)] | map(select(.title == $t)) | .[0] // empty' <<<"$META")
-          if [ -z "$PNODE" ]; then
-            echo "::error::project '$PROJECT_TITLE' not found for $OWNER"; exit 1
-          fi
-          PROJ=$(jq -r '.id' <<<"$PNODE")
-          FIELD=$(jq -r --arg f "$STATUS_FIELD" '.fields.nodes[]? | select(.name == $f) | .id' <<<"$PNODE")
-          OPTION=$(jq -r --arg f "$STATUS_FIELD" --arg o "$INITIAL_STATUS" '.fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$PNODE")
-          if [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
-            echo "::error::field '$STATUS_FIELD' or option '$INITIAL_STATUS' not found"; exit 1
-          fi
+          # Project/field/option resolved by the shared project-lookup action
+          PROJ="$PROJ_ID"; FIELD="$FIELD_ID"; OPTION="$OPTION_ID"
           # Idempotency: walk ALL pages of board items (single query, nullable cursor)
           # — never re-add (and never reset Status on) an issue that's already there.
           # Membership is matched by issue number AND repository.
