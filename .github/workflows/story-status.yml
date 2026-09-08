@@ -47,9 +47,9 @@ jobs:
                 }
               }
             }' -f login="$OWNER")
-          PROJ=$(jq -r --arg t "$PROJECT_TITLE" '.data.user.projectV2.nodes[] | select(.title == $t) | .id' <<<"$META")
-          FIELD=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .id' <<<"$META")
-          OPTION=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" --arg o "$TARGET_STATUS" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$META")
+          PROJ=$(jq -r --arg t "$PROJECT_TITLE" '.data.user.projectsV2.nodes[] | select(.title == $t) | .id' <<<"$META")
+          FIELD=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" '.data.user.projectsV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .id' <<<"$META")
+          OPTION=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" --arg o "$TARGET_STATUS" '.data.user.projectsV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$META")
           if [ -z "$PROJ" ] || [ "$PROJ" = "null" ] || [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
             echo "::error::project/field/option not found (title='$PROJECT_TITLE' field='$STATUS_FIELD' status='$TARGET_STATUS')"; exit 1
           fi
