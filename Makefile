@@ -3,18 +3,20 @@
 # Backend builds go through the Maven wrapper (story #1 AC2) — no local Maven
 # install required, only a JDK 17+.
 
-# frontend/pubspec.lock is resolved against the team pub host (flutter-io.cn
-# mirror); pub writes that host into every lock entry. Refuse to run pub get
-# when the local PUB_HOSTED_URL doesn't match — otherwise the lockfile gets
-# silently rewritten (dirty tree / failing CI hygiene check).
+# frontend/pubspec.lock records the pub host it was resolved against in every
+# entry; pub rewrites the whole lockfile when the local host differs. Fail fast
+# on any mismatch — in either direction — instead of a silently dirty tree.
 .PHONY: check-pub-host
 check-pub-host:
-	@if [ -f frontend/pubspec.lock ] && grep -q 'pub.flutter-io.cn' frontend/pubspec.lock \
-	    && [ "$${PUB_HOSTED_URL:-}" != 'https://pub.flutter-io.cn' ]; then \
-	  echo "ERROR: frontend/pubspec.lock is resolved against https://pub.flutter-io.cn but"; \
-	  echo "PUB_HOSTED_URL is '$${PUB_HOSTED_URL:-<unset>}' — pub get would rewrite the lockfile."; \
-	  echo "Fix: export PUB_HOSTED_URL=https://pub.flutter-io.cn  (see README, Prerequisites)"; \
-	  exit 1; \
+	@if [ -f frontend/pubspec.lock ]; then \
+	  LOCKED=$$(sed -n 's/^ *url: "\(.*\)"$$/\1/p' frontend/pubspec.lock | head -1); \
+	  EFFECTIVE="$${PUB_HOSTED_URL:-https://pub.dev}"; \
+	  if [ -n "$$LOCKED" ] && [ "$$EFFECTIVE" != "$$LOCKED" ]; then \
+	    echo "ERROR: frontend/pubspec.lock is resolved against $$LOCKED but the local"; \
+	    echo "pub host is $$EFFECTIVE — pub get would rewrite the lockfile."; \
+	    echo "Fix: export PUB_HOSTED_URL=$$LOCKED  (see README, Prerequisites)"; \
+	    exit 1; \
+	  fi; \
 	fi
 
 bootstrap:
@@ -28,8 +30,11 @@ lint:
 
 test:
 	@if [ -d backend ]; then cd backend && ./mvnw -q test; fi
-	@if [ -d frontend ]; then cd frontend && flutter test; fi
+	@if [ -d frontend ]; then $(MAKE) --no-print-directory check-pub-host && cd frontend && flutter test; fi
 
+# Backend goes through the full verify lifecycle (compile, test, package) once
+# and reports JaCoCo coverage from the same run — CI relies on this single
+# pass instead of running test and verify separately.
 test-coverage:
-	@if [ -d backend ]; then cd backend && ./mvnw -q test jacoco:report; fi
-	@if [ -d frontend ]; then cd frontend && flutter test --coverage; fi
+	@if [ -d backend ]; then $(MAKE) --no-print-directory check-pub-host && cd backend && ./mvnw -q verify jacoco:report; fi
+	@if [ -d frontend ]; then $(MAKE) --no-print-directory check-pub-host && cd frontend && flutter test --coverage; fi
