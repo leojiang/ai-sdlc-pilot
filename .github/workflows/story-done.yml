@@ -80,7 +80,10 @@ jobs:
             }' -f o="$OWNER" -f r="$REPO_NAME")
           COUNT=$(jq -r '.data.repository.pullRequest.closingIssuesReferences.nodes | length' <<<"$RES")
           if [ -z "$COUNT" ] || [ "$COUNT" = "null" ] || [ "$COUNT" = "0" ]; then
-            echo "PR #$PR_NUMBER closes no issues — skipping"; exit 0
+            # Do NOT exit — the heal sweep below must still run: a superseded
+            # sibling run's closed stories are healed precisely in these rare
+            # windows (the main loop simply iterates zero times)
+            echo "PR #$PR_NUMBER closes no issues — main loop skipped; heal sweep still runs"
           fi
           # Project/field/option resolved by the shared project-lookup action —
           # branch on its marker so an accidental skip can't dereference unset ids
@@ -119,35 +122,19 @@ jobs:
           # from this repo and not yet Done goes to Done. Idempotent and terminal.
           HEAL_CURSOR=""
           while :; do
-            if [ -n "$HEAL_CURSOR" ]; then
-              HPAGE=$(gql -f query='
-                query($id: ID!, $c: String!) {
-                  node(id: $id) { ... on ProjectV2 {
-                    items(first: 100, after: $c) {
-                      pageInfo { hasNextPage endCursor }
-                      nodes {
-                        id
-                        fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } }
-                        content { ... on Issue { state stateReason repository { nameWithOwner } } }
-                      }
+            HPAGE=$(gql -f query='
+              query($id: ID!, $c: String) {
+                node(id: $id) { ... on ProjectV2 {
+                  items(first: 100, after: $c) {
+                    pageInfo { hasNextPage endCursor }
+                    nodes {
+                      id
+                      fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } }
+                      content { ... on Issue { state stateReason labels(first: 50) { nodes { name } } repository { nameWithOwner } } }
                     }
-                  } }
-                }' -f id="$PROJ" -f c="$HEAL_CURSOR")
-            else
-              HPAGE=$(gql -f query='
-                query($id: ID!) {
-                  node(id: $id) { ... on ProjectV2 {
-                    items(first: 100) {
-                      pageInfo { hasNextPage endCursor }
-                      nodes {
-                        id
-                        fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } }
-                        content { ... on Issue { state stateReason repository { nameWithOwner } } }
-                      }
-                    }
-                  } }
-                }' -f id="$PROJ")
-            fi
+                  }
+                } }
+              }' -f id="$PROJ" -F c="${HEAL_CURSOR:-null}")
             while IFS=$'\t' read -r HID _TAG; do
               [ -n "$HID" ] || continue
               gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$HID" -f f="$FIELD" -f o="$OPTION" > /dev/null
@@ -157,6 +144,7 @@ jobs:
               | select((.content.state? // "") == "CLOSED")
               | select((.content.stateReason? // "") == "COMPLETED")
               | select((.content.repository.nameWithOwner? // "") == $repo)
+              | select(any(.content.labels.nodes[]?; . == "story"))
               | select(([.fieldValues.nodes[]? | select(.field.name == "Status") | .name] | first) != "Done")
               | "\(.id)\theal"' <<<"$HPAGE")
             if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$HPAGE")" != "true" ]; then break; fi

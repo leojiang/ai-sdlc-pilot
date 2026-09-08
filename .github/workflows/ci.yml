@@ -170,7 +170,8 @@ jobs:
 
   conventions:
     # Pins the closing-keyword regex with accept/reject fixtures so the pattern
-    # can't silently drift (three workflows + the merge gate depend on it)
+    # can't silently drift (the traceability gate depends on it; the board
+    # workflows consume GitHub-resolved closing references instead)
     runs-on: ubuntu-latest
     steps:
       - name: Closing-keyword regex fixtures
