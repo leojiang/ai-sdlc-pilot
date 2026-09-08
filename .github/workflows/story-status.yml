@@ -29,6 +29,11 @@ jobs:
           if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
             echo "Branch '$GITHUB_REF_NAME' has no leading issue number — skipping"; exit 0
           fi
+          # Never downgrade: if a PR is already open for this branch, the card is In review
+          OPEN_PRS=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq 'length')
+          if [ "$OPEN_PRS" -gt 0 ]; then
+            echo "an open PR already exists for '$GITHUB_REF_NAME' — leaving status untouched"; exit 0
+          fi
           # Resolve project, Status field, and target option
           META=$(gh api graphql -f query='
             query($login: String!) {

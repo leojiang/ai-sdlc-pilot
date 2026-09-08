@@ -17,7 +17,7 @@ Pilot repository for our AI-augmented software development lifecycle. Currently 
 Status moves are automatic consequences of verifiable events — the only manual move is the first one:
 - **Ready** — a human promotes the story after review
 - **In progress** — first push of the `story/<issue#>-*` branch (`.github/workflows/story-status.yml`)
-- **In review** — a PR linking the story is opened (GitHub built-in)
+- **In review** — a non-draft PR referencing the story is opened (`.github/workflows/story-review.yml`)
 - **Done** — the PR merges; the issue auto-closes (GitHub built-in)
 
 ### Definition of Done

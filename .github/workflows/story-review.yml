@@ -1,0 +1,83 @@
+name: Story review
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_TITLE: SDLC Pilot
+  STATUS_FIELD: Status
+  TARGET_STATUS: In review
+
+jobs:
+  set-in-review:
+    # Only non-draft, same-repo PRs represent review-ready work on a story
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Move referenced story items to In review
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "⚠️ PROJECT_TOKEN secret not set — no In-review moves for PR #$PR_NUMBER"; exit 0
+          fi
+          # Every issue number mentioned in the PR body (e.g. "Closes #12")
+          NUMS=$(grep -oE '#[0-9]+' <<<"$PR_BODY" | tr -d '#' | sort -u)
+          if [ -z "$NUMS" ]; then
+            echo "PR #$PR_NUMBER references no issues — skipping"; exit 0
+          fi
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          # Resolve project, Status field, and target option once
+          META=$(gh api graphql -f query='
+            query($login: String!) {
+              user(login: $login) {
+                projectV2(first: 20) {
+                  nodes {
+                    id title
+                    fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } }
+                  }
+                }
+              }
+            }' -f login="$OWNER")
+          PROJ=$(jq -r --arg t "$PROJECT_TITLE" '.data.user.projectV2.nodes[] | select(.title == $t) | .id' <<<"$META")
+          FIELD=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .id' <<<"$META")
+          OPTION=$(jq -r --arg t "$PROJECT_TITLE" --arg f "$STATUS_FIELD" --arg o "$TARGET_STATUS" '.data.user.projectV2.nodes[] | select(.title == $t) | .fields.nodes[]? | select(.name == $f) | .options[]? | select(.name == $o) | .id' <<<"$META")
+          if [ -z "$PROJ" ] || [ "$PROJ" = "null" ] || [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
+            echo "::error::project/field/option not found (title='$PROJECT_TITLE' field='$STATUS_FIELD' status='$TARGET_STATUS')"; exit 1
+          fi
+          MOVED=0
+          for RAW in $NUMS; do
+            NUM=$((10#$RAW))  # normalize zero-padded references
+            # The issue's own projectItems connection: no board paging, no cross-repo collisions
+            RES=$(gh api graphql -f query='
+              query($o: String!, $r: String!, $n: Int!) {
+                repository(owner: $o, name: $r) {
+                  issue(number: $n) {
+                    id state
+                    projectItems(first: 50) { nodes { id project { title } } }
+                  }
+                }
+              }' -f o="$OWNER" -f r="$REPO_NAME" -f n="$NUM")
+            if [ "$(jq -r '.data.repository.issue.state' <<<"$RES")" != "OPEN" ]; then
+              echo "issue #$RAW is missing or closed — skipping"; continue
+            fi
+            ITEM=$(jq -r --arg t "$PROJECT_TITLE" '.data.repository.issue.projectItems.nodes[]? | select(.project.title == $t) | .id' <<<"$RES")
+            if [ -z "$ITEM" ] || [ "$ITEM" = "null" ]; then
+              CONTENT=$(jq -r '.data.repository.issue.id' <<<"$RES")
+              ITEM=$(gh api graphql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
+            fi
+            gh api graphql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$ITEM" -f f="$FIELD" -f o="$OPTION" > /dev/null
+            echo "✅ issue #$NUM → $TARGET_STATUS (PR #$PR_NUMBER)"
+            MOVED=1
+          done
+          if [ "$MOVED" != "1" ]; then echo "no open story issues referenced — board unchanged"; fi
