@@ -38,7 +38,7 @@ jobs:
           META=$(gh api graphql -f query='
             query($login: String!) {
               user(login: $login) {
-                projectV2(first: 20) {
+                projectsV2(first: 20) {
                   nodes {
                     id title
                     fields(first: 30) { nodes { ... on ProjectV2SingleSelectField { name id options { id name } } } }
@@ -64,7 +64,7 @@ jobs:
                     ... on ProjectV2 {
                       items(first: 100, after: $c) {
                         pageInfo { hasNextPage endCursor }
-                        nodes { content { ... on Issue { number } } }
+                        nodes { content { ... on Issue { number repository { nameWithOwner } } } }
                       }
                     }
                   }
@@ -76,13 +76,13 @@ jobs:
                     ... on ProjectV2 {
                       items(first: 100) {
                         pageInfo { hasNextPage endCursor }
-                        nodes { content { ... on Issue { number } } }
+                        nodes { content { ... on Issue { number repository { nameWithOwner } } } }
                       }
                     }
                   }
                 }' -f id="$PROJ")
             fi
-            if jq -e --argjson n "$ISSUE_NUMBER" '.data.node.items.nodes[]? | select((.content.number? // -1) == $n)' <<<"$PAGE" > /dev/null; then
+            if jq -e --argjson n "$ISSUE_NUMBER" --arg repo "$GITHUB_REPOSITORY" '.data.node.items.nodes[]? | select((.content.number? // -1) == $n and (.content.repository.nameWithOwner? // "") == $repo)' <<<"$PAGE" > /dev/null; then
               ON_BOARD=yes; break
             fi
             if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$PAGE")" != "true" ]; then break; fi
