@@ -14,11 +14,16 @@ Pilot repository for our AI-augmented software development lifecycle. Currently 
   and a human approves. PR body must reference the issue ("Closes #N").
 - A story's lifecycle is terminal at Done: follow-up work on a merged story gets its own
   issue; board automation ignores pushes to a closed story's branch.
+- Before writing implementation code, check the story's board status and test-plan approval
+  (`/story-status <n>`). If the card is at Backlog or not on the board, STOP: remind the
+  user to review the story and promote it to Ready, then wait for their instruction.
+  Implementation starts on Ready stories only — CI refuses Backlog → In progress on
+  branch push, and PRs do not move Backlog cards to In review.
 
 ### Board lifecycle (SDLC Pilot project)
 Status moves are automatic consequences of verifiable events — the only manual move is the first one:
 - **Ready** — a human promotes the story after review
-- **In progress** — first push of the `story/<issue#>-*` branch (`.github/workflows/story-status.yml`)
+- **In progress** — first push of the `story/<issue#>-*` branch (`.github/workflows/story-status.yml`) — Ready stories only: a Backlog card is refused until a human promotes it
 - **In review** — a non-draft PR closes the story (on open, or on a body edit that adds the closing ref — `.github/workflows/story-review.yml`)
 - **Done** — a PR closing the story merges (`.github/workflows/story-done.yml`); the issue auto-closes (GitHub built-in)
 

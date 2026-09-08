@@ -54,7 +54,7 @@ jobs:
                       number state id
                       repository { nameWithOwner }
                       labels(first: 50) { nodes { name } }
-                      projectItems(first: 50) { nodes { id project { title } } }
+                      projectItems(first: 50) { nodes { id project { title } fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } } } }
                     }
                   }
                 }
@@ -102,14 +102,19 @@ jobs:
           # non-story issues, and closed issues never touch this board.
           while IFS= read -r ISSUE; do
             NUM=$(jq -r '.number' <<<"$ISSUE")
-            ITEMS=$(jq -r --arg t "$PROJECT_TITLE" '.projectItems.nodes[]? | select(.project.title == $t) | .id' <<<"$ISSUE")
+            ITEMS=$(jq -r --arg t "$PROJECT_TITLE" '.projectItems.nodes[]? | select(.project.title == $t) | "\(.id)\t\([.fieldValues.nodes[]? | select(.field.name == "Status") | .name] | .[0] // "-")"' <<<"$ISSUE")
             if [ -z "$ITEMS" ] || [ "$ITEMS" = "null" ]; then
               CONTENT=$(jq -r '.id' <<<"$ISSUE")
-              ITEMS=$(gql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
+              ITEMS=$(gql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id + "\t-"')
+            fi
+            # Ready gate: a Backlog card was never human-promoted — opening a PR
+            # does not bypass the gate
+            if awk -F'\t' '$2 == "Backlog"' <<<"$ITEMS" | grep -q .; then
+              echo "issue #$NUM is still at Backlog — not moving to $TARGET_STATUS; promote it to Ready first"; continue
             fi
             # Update every matching item — a multi-line id fed to one mutation
             # would fail the run (same class as story-done review finding 1)
-            while IFS= read -r ITEM; do
+            while IFS=$'\t' read -r ITEM _CUR; do
               [ -n "$ITEM" ] || continue
               gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$ITEM" -f f="$FIELD" -f o="$OPTION" > /dev/null
             done <<<"$ITEMS"
