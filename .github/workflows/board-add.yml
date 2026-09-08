@@ -19,8 +19,9 @@ env:
 
 jobs:
   add-story-to-backlog:
-    # Only story issues belong on the board; label applied on creation or later
-    if: contains(github.event.issue.labels.*.name, 'story')
+    # Only OPEN story issues belong on the board; label applied on creation or
+    # later — closed stories are terminal and never (re-)added
+    if: contains(github.event.issue.labels.*.name, 'story') && github.event.issue.state == 'OPEN'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

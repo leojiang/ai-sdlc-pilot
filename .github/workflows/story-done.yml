@@ -13,9 +13,11 @@ env:
 
 jobs:
   set-done:
-    # Only actual merges of same-repo PRs (closed-without-merge changes nothing)
+    # Only actual merges of same-repo PRs into the default branch — non-default
+    # merges don't auto-close the issue, so Done there would be premature terminal
     if: >-
       github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -95,12 +97,17 @@ jobs:
           # follow-up merges to already-closed stories
           while IFS= read -r ISSUE; do
             NUM=$(jq -r '.number' <<<"$ISSUE")
-            ITEM=$(jq -r --arg t "$PROJECT_TITLE" '.projectItems.nodes[]? | select(.project.title == $t) | .id' <<<"$ISSUE")
-            if [ -z "$ITEM" ] || [ "$ITEM" = "null" ]; then
+            ITEMS=$(jq -r --arg t "$PROJECT_TITLE" '.projectItems.nodes[]? | select(.project.title == $t) | .id' <<<"$ISSUE")
+            if [ -z "$ITEMS" ] || [ "$ITEMS" = "null" ]; then
               CONTENT=$(jq -r '.id' <<<"$ISSUE")
-              ITEM=$(gql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
+              ITEMS=$(gql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
             fi
-            gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$ITEM" -f f="$FIELD" -f o="$OPTION" > /dev/null
+            # Update every matching item — a multi-line id fed to one mutation
+            # would fail the run that owns the terminal transition
+            while IFS= read -r ITEM; do
+              [ -n "$ITEM" ] || continue
+              gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$ITEM" -f f="$FIELD" -f o="$OPTION" > /dev/null
+            done <<<"$ITEMS"
             echo "✅ issue #$NUM → $TARGET_STATUS (PR #$PR_NUMBER merged)"
             MOVED=1
           done < <(jq -c --arg repo "$GITHUB_REPOSITORY" '.data.repository.pullRequest.closingIssuesReferences.nodes[]
