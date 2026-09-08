@@ -20,8 +20,9 @@ env:
 jobs:
   add-story-to-backlog:
     # Only OPEN story issues belong on the board; label applied on creation or
-    # later — closed stories are terminal and never (re-)added
-    if: contains(github.event.issue.labels.*.name, 'story') && github.event.issue.state == 'OPEN'
+    # later. NOTE: webhook payload state is lowercase ("open"/"closed") — unlike
+    # the GraphQL IssueState enum — hence the != comparison.
+    if: contains(github.event.issue.labels.*.name, 'story') && github.event.issue.state != 'closed'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -31,12 +31,6 @@ jobs:
           fi
           NUM=$((10#$NUM))  # normalize zero-padded numbers for --argjson/-F
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          # Fast path: a non-draft PR already open for this branch means the card
-          # is (or will be) In review — leave it alone. Drafts don't freeze moves.
-          OPEN_PRS=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number,isDraft --jq '[.[] | select(.isDraft == false)] | length')
-          if [ "$OPEN_PRS" -gt 0 ]; then
-            echo "a non-draft PR already exists for '$GITHUB_REF_NAME' — leaving status untouched"; exit 0
-          fi
           gql() {
             local out
             if ! out=$(gh api graphql "$@"); then
@@ -47,6 +41,38 @@ jobs:
             fi
             printf '%s' "$out"
           }
+          # The issue first: a closed story's lifecycle is complete — board
+          # automation never writes its card again, whatever a stray branch push
+          # does. Checked BEFORE the PR fast path so the skip reason is unambiguous.
+          RES=$(gql -F n="$NUM" -f query='
+            query($o: String!, $r: String!, $n: Int!) {
+              repository(owner: $o, name: $r) {
+                issue(number: $n) {
+                  id state
+                  projectItems(first: 50) {
+                    nodes {
+                      id
+                      project { title }
+                      fieldValues(first: 10) {
+                        nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }' -f o="$OWNER" -f r="$REPO_NAME")
+          if [ "$(jq -r '.data.repository.issue.id' <<<"$RES")" = "null" ]; then
+            echo "::error::branch '$GITHUB_REF_NAME' references issue #$NUM, which does not exist"; exit 1
+          fi
+          if [ "$(jq -r '.data.repository.issue.state' <<<"$RES")" != "OPEN" ]; then
+            echo "issue #$NUM is closed — story lifecycle complete; ignoring push to '$GITHUB_REF_NAME'"; exit 0
+          fi
+          # Fast path (open stories only): a non-draft PR already open for this
+          # branch means the card is (or will be) In review — leave it alone.
+          OPEN_PRS=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number,isDraft --jq '[.[] | select(.isDraft == false)] | length')
+          if [ "$OPEN_PRS" -gt 0 ]; then
+            echo "a non-draft PR already exists for '$GITHUB_REF_NAME' — leaving status untouched"; exit 0
+          fi
           # Org-portable project lookup: organization() ERRORS (not nulls) for user
           # logins, so probe it tolerantly first, then fall back to user()
           META=$(gh api graphql -f query='
@@ -73,33 +99,9 @@ jobs:
           if [ -z "$FIELD" ] || [ "$FIELD" = "null" ] || [ -z "$OPTION" ] || [ "$OPTION" = "null" ]; then
             echo "::error::field '$STATUS_FIELD' or option '$TARGET_STATUS' not found"; exit 1
           fi
-          # The issue's own projectItems connection: no board paging, no cross-repo
-          # collisions; carries each item's CURRENT Status (Status-scoped value).
-          RES=$(gql -F n="$NUM" -f query='
-            query($o: String!, $r: String!, $n: Int!) {
-              repository(owner: $o, name: $r) {
-                issue(number: $n) {
-                  id state
-                  projectItems(first: 50) {
-                    nodes {
-                      id
-                      project { title }
-                      fieldValues(first: 10) {
-                        nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } }
-                      }
-                    }
-                  }
-                }
-              }
-            }' -f o="$OWNER" -f r="$REPO_NAME")
-          if [ "$(jq -r '.data.repository.issue.id' <<<"$RES")" = "null" ]; then
-            echo "::error::branch '$GITHUB_REF_NAME' references issue #$NUM, which does not exist"; exit 1
-          fi
-          # A closed story's lifecycle is complete — board automation never writes
-          # its card again, whatever a stray branch push does
-          if [ "$(jq -r '.data.repository.issue.state' <<<"$RES")" != "OPEN" ]; then
-            echo "issue #$NUM is closed — story lifecycle complete; ignoring push to '$GITHUB_REF_NAME'"; exit 0
-          fi
+          # RES (issue + projectItems, fetched above) carries each item's CURRENT
+          # Status (Status-scoped value); projectItems matching has no board paging
+          # and no cross-repo collisions.
           ITEMS=$(jq -r --arg t "$PROJECT_TITLE" '
             .data.repository.issue.projectItems.nodes[]?
             | select(.project.title == $t)

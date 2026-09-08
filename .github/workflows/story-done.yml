@@ -101,6 +101,7 @@ jobs:
             if [ -z "$ITEMS" ] || [ "$ITEMS" = "null" ]; then
               CONTENT=$(jq -r '.id' <<<"$ISSUE")
               ITEMS=$(gql -f query='mutation($p: ID!, $c: ID!){ addProjectV2ItemById(input:{projectId:$p contentId:$c}){ item{ id } } }' -f p="$PROJ" -f c="$CONTENT" | jq -r '.data.addProjectV2ItemById.item.id')
+              echo "⚠️ issue #$NUM was not on the board — added directly at $TARGET_STATUS (no lifecycle trail)"
             fi
             # Update every matching item — a multi-line id fed to one mutation
             # would fail the run that owns the terminal transition
