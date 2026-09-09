@@ -12,22 +12,32 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
 2. Board gate — check the card's Status (the `/story-status` query, coordinates derived
    so the command ports to other repos untouched):
    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner); OWNER=${REPO%/*}; NAME=${REPO#*/}
-   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ projectItems(first: 10){ nodes{ fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } } }' -f o=$OWNER -f r=$NAME -F n=$ARGUMENTS
-   Read the value of the field named `Status` (no `Status` value or no card at all =
-   not on the board). Then:
+   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ projectItems(first: 10){ nodes{ project{title} fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } } }' -f o=$OWNER -f r=$NAME -F n=$ARGUMENTS
+   Read the value of the field named `Status` from the item on this repo's board — if
+   items come back from more than one project, report the ambiguity instead of
+   guessing. No `Status` value or no card at all = not on the board. Then:
    - **Ready** → continue with step 3
    - **In progress** → resume mode: first apply the same clean-tree rule as step 3
-     (`git status --porcelain` must print nothing — dirty → STOP and show it). Find the
-     branch with `git branch --all --list 'story/$ARGUMENTS-*'`; if it exists locally,
-     `git switch <branch>` — if git reports it is already checked out in another
-     worktree, STOP and pass that worktree path to the user (never switch with `--force`).
-     After switching, `git pull --ff-only` if the branch tracks a remote (a branch with
-     no upstream is local-only — leave it). Then skip to step 5. If no branch exists
-     anywhere, fall through to steps 3-4 and create it.
+     (`git status --porcelain` must print nothing — dirty → STOP and show it). Locate
+     the branch where it is authoritative — the remote:
+     `git ls-remote --heads origin "story/$ARGUMENTS-*"`
+     (local listings miss never-fetched branches, and remote-tracking names carry an
+     `origin/` prefix that `story/$ARGUMENTS-*` patterns don't match). Branch name =
+     the ref with `refs/heads/` stripped. If found: `git switch <branch>` when it
+     exists locally, else `git switch -c <branch> --track origin/<branch>`; if git
+     reports it is already checked out in another worktree, STOP and pass that
+     worktree path to the user (never switch with `--force`). After switching,
+     `git pull --ff-only` when the branch tracks a remote. Then skip to step 5.
+     If the remote has no such branch, check for a local-only one
+     (`git branch --list 'story/$ARGUMENTS-*'`) before falling through to steps 3-4
+     and creating it fresh.
    - **Backlog** → STOP: "Card #$ARGUMENTS is at Backlog — review it and promote it to
      Ready first." Create no branch, write no code, wait for the user
-   - **not on the board / Done / In review** → STOP with guidance: follow-up work needs
-     a new issue; an unboarded story needs boarding before it can be worked on
+   - **In review** → STOP starting new work — the story's PR already exists. To address
+     review feedback, push to the existing `story/$ARGUMENTS-*` branch (the open PR
+     picks it up; the card stays in review); only unrelated follow-up gets a new issue
+   - **not on the board / Done** → STOP with guidance: follow-up work needs a new
+     issue; an unboarded story needs boarding before it can be worked on
 
 3. Sync: first require a clean tree — `git status --porcelain` must print nothing.
    If it prints anything (modified, staged, or untracked files — including
@@ -42,10 +52,12 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
    This push moves the card to In progress (story-status.yml) — that is expected and
    is the lifecycle connecting, not a side effect to suppress.
 
-5. Implement per CLAUDE.md: acceptance criteria are the contract; draft a test plan with
-   `/test-plan $ARGUMENTS` and generate tests with `/gen-tests` where applicable;
-   `make lint` and `make test` must pass before each push. End by opening the PR to
-   `main` whose body contains a closing keyword for the story ("Closes #$ARGUMENTS") —
-   story-review.yml then moves the card to In review.
+5. Implement per CLAUDE.md: acceptance criteria are the contract; work from the
+   reviewed test plan at docs/test-plans/issue-$ARGUMENTS-test-plan.md — if it is
+   missing, draft one with `/test-plan $ARGUMENTS` and say so in the PR (a reviewed
+   artifact must never be silently regenerated); generate tests with `/gen-tests`
+   where applicable; `make lint` and `make test` must pass before each push. End by
+   opening the PR to `main` whose body contains a closing keyword for the story
+   ("Closes #$ARGUMENTS") — story-review.yml then moves the card to In review.
 
 Merging is never part of this command. The merge click belongs to a human, always.
