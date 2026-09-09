@@ -8,6 +8,9 @@
 #
 # Usage: scripts/ai-review.sh <pr-number> [round-context...]
 # Blocking; prints the review markdown to stdout. Read-only agent allowlist.
+# Scope: same-repo PRs — the /start-coding path pushes story branches to origin
+# and opens PRs from them, so a fork PR never reaches this script; CI's
+# ai-review.yml is the layer that refuses fork-authored content.
 set -euo pipefail
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -35,20 +38,27 @@ command -v claude >/dev/null 2>&1 ||
 
 PROMPT_FILE="$TOPLEVEL/.claude/prompts/pr-review.md"
 [ -f "$PROMPT_FILE" ] || die "review prompt not found: $PROMPT_FILE"
+[ -r "$PROMPT_FILE" ] || die "review prompt not readable: $PROMPT_FILE"
 cd "$TOPLEVEL"
 
-{
-  echo "Review pull request #$PR of this repository."
-  echo
-  cat "$PROMPT_FILE"
-  if [ $# -gt 0 ]; then
+# Assemble first, pipe only claude: an assembly failure (e.g. cat dying on an
+# unreadable file) must abort here with its own message, never leak into the
+# pipeline where the || die below would misattribute it as a claude failure.
+PROMPT=$(
+  {
+    echo "Review pull request #$PR of this repository."
     echo
-    echo "## Round context"
-    for ctx in "$@"; do
-      echo "- $ctx"
-    done
-  fi
-} | claude -p --max-turns 30 \
+    cat "$PROMPT_FILE"
+    if [ $# -gt 0 ]; then
+      echo
+      echo "## Round context"
+      for ctx in "$@"; do
+        echo "- $ctx"
+      done
+    fi
+  }
+)
+printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
   --allowedTools "Read" "Grep" "Glob" \
   "Bash(gh pr diff *)" "Bash(gh pr view *)" "Bash(gh issue view *)" \
   "Bash(git log *)" "Bash(git show *)" ||

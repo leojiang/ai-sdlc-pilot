@@ -53,6 +53,11 @@ check-gate-query:
 .PHONY: check-ai-review
 check-ai-review:
 	@scripts/ai-review.fixture.sh
+	@grep -qF 'scripts/ai-review.sh <pr>' .claude/commands/start-coding.md || { \
+	  echo "ERROR: /start-coding step 6 no longer invokes scripts/ai-review.sh —"; \
+	  echo "       the loop and the script must change together (check-gate-query class)"; \
+	  exit 1; }
+	@echo "check-ai-review: /start-coding still wired to scripts/ai-review.sh"
 
 lint:
 	@$(MAKE) --no-print-directory check-gate-query
