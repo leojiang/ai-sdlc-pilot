@@ -1,5 +1,5 @@
 ---
-description: Start work on a story — mechanical Ready gate, sync main, create and push the story branch, then implement
+description: Start work on a story — mechanical Ready gate, sync main, create and push the story branch, implement, then converge the AI review before handoff
 argument-hint: <issue number>
 ---
 The single entry point for implementation work. Run the steps in order — the first
@@ -40,7 +40,12 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
      review feedback, apply the same clean-tree rule as resume mode, then locate the
      existing `story/$ARGUMENTS-*` branch with the same `git ls-remote` recipe as
      above, switch to it, and push (the open PR picks it up; the card stays in
-     review); only unrelated follow-up gets a new issue
+     review), then resume the loop at step 6 on that same PR — its number comes
+     from `gh pr list --head <branch> --json number` (exactly one open PR is
+     expected; anything else, STOP and ask), continuing round numbering from
+     the PR body's review-loop log (a resumed loop opens at `round N+1: fresh
+     review after resume`, never round 1 again; no log in the body → STOP and
+     ask); only unrelated follow-up gets a new issue
    - **not on the board / Done** → STOP with guidance: follow-up work needs a new
      issue; an unboarded story needs boarding before it can be worked on
 
@@ -64,5 +69,34 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
    where applicable; `make lint` and `make test` must pass before each push. End by
    opening the PR to `main` whose body contains a closing keyword for the story
    ("Closes #$ARGUMENTS") — story-review.yml then moves the card to In review.
+
+6. AI-review convergence loop — mandatory, immediately after the PR exists
+   (opened in step 5, or an already-open PR this run just updated). The loop is
+   procedural, never ad-hoc: every round is `scripts/ai-review.sh`, the identical
+   scripted invocation, differing between rounds only in the quoted round-context
+   arg (never hand-type a variant — the #30 gate-query brace was hand-copy drift).
+   1. A fresh loop opens with `scripts/ai-review.sh <pr> "round 1: fresh review"`;
+      a resumed loop opens at round N+1 per the In review bullet above. Run it
+      and read the output. A clean round 1 (no 🔴/🟡, verdict "no blocking
+      concerns", `gh pr checks` green) is already converged — skip straight to
+      handoff below, unless the story's own validation plan demands a witnessed
+      iteration. After every round, clean or not, append its number,
+      invocation, and outcome to a **Review-loop log** section in the PR body —
+      the persisted trail the In-review resume path continues. The per-push CI
+      backstop (`ai-review.yml`) reviews every mid-loop push; treat its
+      findings as loop findings — fold their fixes into the next round's entry
+      or log them as their own entries marked `backstop` — and before handoff
+      the log must cover every fix commit on the PR.
+   2. Fix every 🔴/🟡 finding (💬 findings are folded into nearby fixes or
+      explicitly dismissed with a reason in the PR body), commit, push.
+   3. Re-run with round context: `scripts/ai-review.sh <pr> "round N: verify
+      fixes for <one-line list of what round N-1 flagged and you changed> and
+      re-review fresh"` — then confirm `gh pr checks` shows the required checks
+      green.
+   4. Converged = verdict "no blocking concerns" + no unresolved 🔴/🟡 findings +
+      required checks green. Anything less and the loop continues.
+   5. Budget: after 10 rounds without convergence, STOP and report honestly what
+      remains — never rubber-stamp a round to exit the loop.
+   6. Hand the PR to the user as ready for human merge.
 
 Merging is never part of this command. The merge click belongs to a human, always.
