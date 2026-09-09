@@ -128,8 +128,8 @@ chmod +x "$FAILBIN/claude"
 RC=0; STDOUT=$(cd "$HERE" && PATH="$FAILBIN:$PATH" "$SUBJECT" 9 2>"$BIN/err.txt") || RC=$?
 [ "$RC" -eq 1 ] || bad "failed claude round should exit 1, got $RC"
 ok
-grep -q "claude exited nonzero" "$BIN/err.txt" ||
-  bad "failed round must explain claude's nonzero exit: $(cat "$BIN/err.txt")"
+grep -q "claude exited 1 —" "$BIN/err.txt" ||
+  bad "failed round must explain claude's nonzero exit (with its code): $(cat "$BIN/err.txt")"
 ok
 [ -n "$STDOUT" ] && bad "failed round must not emit review stdout: $STDOUT" || ok
 rm -rf "$FAILBIN" "$BIN"

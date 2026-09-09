@@ -40,8 +40,10 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
      review feedback, apply the same clean-tree rule as resume mode, then locate the
      existing `story/$ARGUMENTS-*` branch with the same `git ls-remote` recipe as
      above, switch to it, and push (the open PR picks it up; the card stays in
-     review), then resume the loop at step 6 on that same PR; only unrelated
-     follow-up gets a new issue
+     review), then resume the loop at step 6 on that same PR — its number comes
+     from `gh pr list --head <branch> --json number` (exactly one open PR is
+     expected; anything else, STOP and ask); only unrelated follow-up gets a
+     new issue
    - **not on the board / Done** → STOP with guidance: follow-up work needs a new
      issue; an unboarded story needs boarding before it can be worked on
 
@@ -72,7 +74,9 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
    scripted invocation, differing between rounds only in the quoted round-context
    arg (never hand-type a variant — the #30 gate-query brace was hand-copy drift).
    1. Round 1: `scripts/ai-review.sh <pr> "round 1: fresh review"` — run it and
-      read the output.
+      read the output. A clean round 1 (no 🔴/🟡, verdict "no blocking concerns",
+      `gh pr checks` green) is already converged — skip straight to handoff below,
+      unless the story's own validation plan demands a witnessed iteration.
    2. Fix every 🔴/🟡 finding (💬 findings are folded into nearby fixes or
       explicitly dismissed with a reason in the PR body), commit, push.
    3. Re-run with round context: `scripts/ai-review.sh <pr> "round N: verify
