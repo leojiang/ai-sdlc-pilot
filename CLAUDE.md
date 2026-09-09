@@ -14,11 +14,12 @@ Pilot repository for our AI-augmented software development lifecycle. Currently 
   and a human approves. PR body must reference the issue ("Closes #N").
 - A story's lifecycle is terminal at Done: follow-up work on a merged story gets its own
   issue; board automation ignores pushes to a closed story's branch.
-- Before writing implementation code, check the story's board status and test-plan approval
-  (`/story-status <n>`). If the card is at Backlog or not on the board, STOP: remind the
-  user to review the story and promote it to Ready, then wait for their instruction.
-  Implementation starts on Ready stories only — CI refuses Backlog → In progress on
-  branch push, and PRs do not move Backlog cards to In review.
+- Implementation starts only via `/start-coding <n>` — the single entry point. It checks
+  the card's board Status mechanically and stops unless the story is Ready (or In progress
+  when resuming); Backlog and unboarded stories are refused. `Ready` is the one lock: the
+  `test plan approved` comment is no longer a gate — `/test-plan` drafts an aid that gets
+  reviewed as part of card review. CI backs the gate up — Backlog → In progress is
+  refused on branch push, and PRs do not move Backlog cards to In review.
 
 ### Board lifecycle (SDLC Pilot project)
 Status moves are automatic consequences of verifiable events — the only manual move is the first one:
@@ -30,7 +31,7 @@ Status moves are automatic consequences of verifiable events — the only manual
 ### Definition of Done
 A story is done when its PR merges, and all of the following held at merge time:
 1. Every acceptance criterion has a passing test, traceable via the test plan
-2. The test plan was human-approved before implementation started
+2. The story was human-promoted to Ready before implementation started (the `/start-coding` gate)
 3. `lint`, `test`, and `traceability` CI checks are green
 4. All AI review threads are resolved, or explicitly dismissed with a reason
 5. A human clicked merge
