@@ -92,7 +92,7 @@ jobs:
           # exits first; with a token the action fails hard) — kept against
           # future refactors that move the guards.
           if [ "${PROJECT_LOOKUP:-}" != "ok" ]; then
-            echo "⚠️ project-lookup did not resolve — skipping"; exit 0
+            echo "::error::project-lookup did not resolve"; exit 1
           fi
           PROJ="$PROJ_ID"; FIELD="$FIELD_ID"; OPTION="$OPTION_ID"
           MOVED=0
@@ -127,6 +127,8 @@ jobs:
           # recovery: closed-as-completed means Done however it closed — including
           # maintainer closes without any PR merge (see CLAUDE.md lifecycle).
           # Idempotent and terminal.
+          # Scope: repairs CARDED stories only — an unboarded closed+completed
+          # story (cancelled run + never boarded) is a documented residual, #25.
           HEAL_CURSOR=""
           while :; do
             HPAGE=$(gql -f query='

@@ -88,7 +88,7 @@ jobs:
           # exits first; with a token the action fails hard) — kept against
           # future refactors that move the guards.
           if [ "${PROJECT_LOOKUP:-}" != "ok" ]; then
-            echo "⚠️ project-lookup did not resolve — skipping"; exit 0
+            echo "::error::project-lookup did not resolve"; exit 1
           fi
           PROJ="$PROJ_ID"; FIELD="$FIELD_ID"; OPTION="$OPTION_ID"
           # RES (issue + projectItems, fetched above) carries each item's CURRENT
