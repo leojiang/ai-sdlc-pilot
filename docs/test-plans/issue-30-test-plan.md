@@ -25,5 +25,6 @@ not executable tests.
 - The STOP branches and resume path are prose until reality exercises them; each
   unwitnessed branch is expected to surface as a small follow-up, not a reopen.
 - The gate query is duplicated (start-coding.md and story-status.md must stay
-  byte-identical); the round-3 brace bug came from hand-copying. Any future edit to
-  one must be diffed against the other — or deduplicated in a follow-up story.
+  byte-identical); the round-3 brace bug came from hand-copying. Now guarded
+  mechanically: `make check-gate-query` (part of `make lint` and CI) fails on any
+  drift between the copies.
