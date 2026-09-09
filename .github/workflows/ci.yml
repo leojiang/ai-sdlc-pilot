@@ -191,10 +191,11 @@ jobs:
           reject "context: see #9"
           reject "This PR discloses issues close to #12"
           reject "no reference at all"
-          # URL-form refs: GitHub's parser DOES resolve these (the board moves),
-          # but traceability intentionally requires the "#N" form — the divergence
-          # is pinned here so it stays a documented choice, not a surprise
+          # URL-form and owner/repo#N refs: GitHub's parser resolves both (the
+          # board moves), but traceability intentionally requires the bare "#N"
+          # form — the divergence is pinned here so it stays a documented choice
           reject "Closes https://github.com/foo/bar/issues/9"
+          reject "Closes owner/repo#16"
           echo "✅ closing-keyword fixtures all pass"
 
   triage:

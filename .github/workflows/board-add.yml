@@ -59,8 +59,10 @@ jobs:
             fi
             printf '%s' "$out"
           }
-          # Project/field/option resolved by the shared project-lookup action —
-          # branch on its marker so an accidental skip can't dereference unset ids
+          # Project/field/option resolved by the shared project-lookup action.
+          # Belt-and-suspenders: currently unreachable (the token guard above
+          # exits first; with a token the action fails hard) — kept against
+          # future refactors that move the guards.
           if [ "${PROJECT_LOOKUP:-}" != "ok" ]; then
             echo "⚠️ project-lookup did not resolve — skipping"; exit 0
           fi

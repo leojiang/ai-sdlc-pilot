@@ -87,8 +87,10 @@ jobs:
             # windows (the main loop simply iterates zero times)
             echo "PR #$PR_NUMBER closes no issues — main loop skipped; heal sweep still runs"
           fi
-          # Project/field/option resolved by the shared project-lookup action —
-          # branch on its marker so an accidental skip can't dereference unset ids
+          # Project/field/option resolved by the shared project-lookup action.
+          # Belt-and-suspenders: currently unreachable (the token guard above
+          # exits first; with a token the action fails hard) — kept against
+          # future refactors that move the guards.
           if [ "${PROJECT_LOOKUP:-}" != "ok" ]; then
             echo "⚠️ project-lookup did not resolve — skipping"; exit 0
           fi
@@ -135,13 +137,19 @@ jobs:
                     nodes {
                       id
                       fieldValues(first: 10) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } }
-                      content { ... on Issue { state stateReason labels(first: 50) { nodes { name } } repository { nameWithOwner } } }
+                      content { ... on Issue { number state stateReason labels(first: 50) { nodes { name } } repository { nameWithOwner } } }
                     }
                   }
                 } }
               }' -f id="$PROJ" -F c="${HEAL_CURSOR:-null}")
-            while IFS=$'\t' read -r HID _TAG; do
+            while IFS=$'\t' read -r HID HNUM; do
               [ -n "$HID" ] || continue
+              # Merge-adjacent re-check (repo idiom, cf. story-status/story-review):
+              # the page walk's state read may be stale — an issue reopened inside
+              # the window must not be force-moved to terminal Done
+              if [ "$(gh issue view "$HNUM" -R "$GITHUB_REPOSITORY" --json state,stateReason -q '.state + "/" + .stateReason')" != "CLOSED/COMPLETED" ]; then
+                echo "skip heal: issue #$HNUM is no longer CLOSED/COMPLETED"; continue
+              fi
               gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$HID" -f f="$FIELD" -f o="$OPTION" > /dev/null
               echo "🩹 heal: closed story's card → $TARGET_STATUS (closed-as-completed ⇒ Done: policy + race recovery)"
             done < <(jq -r --arg repo "$GITHUB_REPOSITORY" --arg f "$STATUS_FIELD" --arg done "$TARGET_STATUS" '
@@ -151,7 +159,7 @@ jobs:
               | select((.content.repository.nameWithOwner? // "") == $repo)
               | select(any(.content.labels.nodes[]?.name; . == "story"))
               | select(([.fieldValues.nodes[]? | select(.field.name == $f) | .name] | first) != $done)
-              | "\(.id)\theal"' <<<"$HPAGE")
+              | "\(.id)\t\(.content.number)"' <<<"$HPAGE")
             if [ "$(jq -r '.data.node.items.pageInfo.hasNextPage' <<<"$HPAGE")" != "true" ]; then break; fi
             HEAL_CURSOR=$(jq -r '.data.node.items.pageInfo.endCursor' <<<"$HPAGE")
           done
