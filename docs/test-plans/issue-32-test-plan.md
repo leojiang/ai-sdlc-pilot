@@ -14,7 +14,7 @@ meta-dogfooding — this story's PR is the first to run it end to end.
 
 | Acceptance criterion | Evidence | Layer |
 |---|---|---|
-| `scripts/ai-review.sh <pr> [round-context…]` CLI shape exists | Fixture: stubbed `claude` on PATH captures argv — asserts `--max-turns 30` and the read-only allowlist (`gh pr diff/view`, `gh issue view`, `git log/show`, `Read`, `Grep`, `Glob`) and nothing else | automated — `make check-ai-review` (in `make lint`, hence CI) |
+| `scripts/ai-review.sh <pr> [round-context…]` CLI shape exists | Fixture: stubbed `claude` on PATH captures argv — asserts `--max-turns 30`, the read-only allowlist (`gh pr diff/view`, `gh issue view`, `git log/show`, `Read`, `Grep`, `Glob`), and `--disallowedTools` denying the write forms (`gh pr comment/edit/merge`, `gh issue comment/edit/create`) — project settings allow `Bash(gh issue *)` and merge over `--allowedTools` (round-8 🟡 finding) | automated — `make check-ai-review` (in `make lint`, hence CI) |
 | Assembles `.claude/prompts/pr-review.md` + PR number + round context, pipes to `claude -p` | Fixture: same stub captures stdin — asserts prompt contains the verbatim prompt file, the PR number, and each round-context arg | automated — `make check-ai-review` |
 | Blocking, prints the review to stdout | Fixture: stub writes a sentinel to stdout; script's stdout must be exactly the sentinel (no interleaved chatter) | automated — `make check-ai-review` |
 | Failed round (claude exits nonzero) dies with a clear message, never an empty review | Fixture: failing stub — nonzero exit + "claude exited 1 —" (with the code) on stderr + empty stdout (round-2 💬 finding, pinned) | automated — `make check-ai-review` |

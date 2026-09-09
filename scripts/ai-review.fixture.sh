@@ -27,7 +27,10 @@ case "$OUT" in *integer*) ok ;; *) bad "non-integer run must say 'integer', got:
 
 # --- refusal: outside a git repository ---------------------------------------
 TMP=$(mktemp -d)
-RC=0; OUT=$(cd "$TMP" && "$SUBJECT" 7 2>&1) || RC=$?
+# GIT_CEILING_DIRECTORIES blocks the upward worktree search: with an exotic
+# TMPDIR inside a git repo, the case must still hit the refusal, never proceed
+# to invoking the real claude from make lint (round-8 💬 finding).
+RC=0; OUT=$(cd "$TMP" && GIT_CEILING_DIRECTORIES="$TMP" "$SUBJECT" 7 2>&1) || RC=$?
 [ "$RC" -eq 1 ] || bad "outside-repo run should exit 1, got $RC"
 case "$OUT" in *git\ repository*) ok ;; *) bad "outside-repo run must name the git-repo requirement, got: $OUT" ;; esac
 
@@ -72,9 +75,9 @@ run_stub() { # <pr> [context...] -> captures stdout/stderr, sets RC
     PATH="$BIN:$PATH" "$SUBJECT" "$@" 2>"$BIN/err.txt") && RC=0 || RC=$?
 }
 
-# With round context: argv pinned set-wise (12 tokens: -p, --max-turns, 30,
-# --allowedTools + 8 allowlist entries — order-free so cosmetic reorders pass,
-# additions/removals/typos fail).
+# With round context: argv pinned set-wise (19 tokens: -p, --max-turns, 30,
+# --allowedTools + 8 allowlist entries, --disallowedTools + 6 denied write
+# forms — order-free so cosmetic reorders pass, additions/removals/typos fail).
 run_stub 42 "round 1: fresh review" "round 2: verify fixes"
 [ "$RC" -eq 0 ] || { cat "$BIN/err.txt"; bad "stubbed happy path should exit 0, got $RC"; }
 ok
@@ -82,11 +85,13 @@ ok
 ok
 [ -s "$BIN/err.txt" ] && bad "happy path must print nothing to stderr: $(cat "$BIN/err.txt")" || ok
 LINES=$(wc -l <"$CAP_ARGS" | tr -d ' ')
-[ "$LINES" -eq 12 ] || bad "claude argv should have 12 tokens, got $LINES: $(cat "$CAP_ARGS")"
+[ "$LINES" -eq 19 ] || bad "claude argv should have 19 tokens, got $LINES: $(cat "$CAP_ARGS")"
 ok
 for token in '-p' '--max-turns' '30' '--allowedTools' 'Read' 'Grep' 'Glob' \
   'Bash(gh pr diff *)' 'Bash(gh pr view *)' 'Bash(gh issue view *)' \
-  'Bash(git log *)' 'Bash(git show *)'; do
+  'Bash(git log *)' 'Bash(git show *)' \
+  '--disallowedTools' 'Bash(gh pr comment *)' 'Bash(gh pr edit *)' 'Bash(gh pr merge *)' \
+  'Bash(gh issue comment *)' 'Bash(gh issue edit *)' 'Bash(gh issue create *)'; do
   grep -qxF -e "$token" "$CAP_ARGS" || bad "claude argv missing token: $token (got: $(cat "$CAP_ARGS"))"
   ok
 done

@@ -7,7 +7,11 @@
 # shape between rounds.
 #
 # Usage: scripts/ai-review.sh <pr-number> [round-context...]
-# Blocking; prints the review markdown to stdout. Read-only agent allowlist.
+# Blocking; prints the review markdown to stdout. The allowlist below is
+# read-only, but Claude Code layers project/user settings on top of --allowedTools
+# (this repo's .claude/settings.json allows `Bash(gh issue *)`), so
+# --disallowedTools denies the obvious write forms; user-level settings can
+# never be fully excluded — review output is advisory either way.
 # Scope: same-repo PRs — the /start-coding path pushes story branches to origin
 # and opens PRs from them, so a fork PR never reaches this script; CI's
 # ai-review.yml is the layer that refuses fork-authored content.
@@ -67,7 +71,9 @@ RC=0
 REVIEW=$(printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
   --allowedTools "Read" "Grep" "Glob" \
   "Bash(gh pr diff *)" "Bash(gh pr view *)" "Bash(gh issue view *)" \
-  "Bash(git log *)" "Bash(git show *)") ||
+  "Bash(git log *)" "Bash(git show *)" \
+  --disallowedTools "Bash(gh pr comment *)" "Bash(gh pr edit *)" "Bash(gh pr merge *)" \
+  "Bash(gh issue comment *)" "Bash(gh issue edit *)" "Bash(gh issue create *)") ||
   RC=$?
 if [ "$RC" -ne 0 ]; then
   die "claude exited $RC — the review round failed; there is no review to evaluate (auth failure, flag rejection, and crash are distinguishable only by this code)"
