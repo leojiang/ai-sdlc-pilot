@@ -37,9 +37,10 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
    - **Backlog** → STOP: "Card #$ARGUMENTS is at Backlog — review it and promote it to
      Ready first." Create no branch, write no code, wait for the user
    - **In review** → STOP starting new work — the story's PR already exists. To address
-     review feedback, locate the existing `story/$ARGUMENTS-*` branch with the same
-     `git ls-remote` recipe as above, switch to it, and push (the open PR picks it
-     up; the card stays in review); only unrelated follow-up gets a new issue
+     review feedback, apply the same clean-tree rule as resume mode, then locate the
+     existing `story/$ARGUMENTS-*` branch with the same `git ls-remote` recipe as
+     above, switch to it, and push (the open PR picks it up; the card stays in
+     review); only unrelated follow-up gets a new issue
    - **not on the board / Done** → STOP with guidance: follow-up work needs a new
      issue; an unboarded story needs boarding before it can be worked on
 

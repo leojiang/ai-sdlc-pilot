@@ -32,8 +32,8 @@ bootstrap:
 # together, byte-identical.
 .PHONY: check-gate-query
 check-gate-query:
-	@a=$$(grep '^   gh api graphql' .claude/commands/story-status.md | sed 's/^ *//' | head -1); \
-	 b=$$(grep '^   gh api graphql' .claude/commands/start-coding.md | sed 's/^ *//' | head -1); \
+	@a=$$(grep '^   gh api graphql' .claude/commands/story-status.md | sed 's/^ *//'); \
+	 b=$$(grep '^   gh api graphql' .claude/commands/start-coding.md | sed 's/^ *//'); \
 	 if [ -z "$$a" ] || [ -z "$$b" ]; then \
 	   echo "ERROR: check-gate-query could not find the gate query in both command files"; \
 	   exit 1; \
