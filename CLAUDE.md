@@ -12,6 +12,10 @@ Pilot repository for our AI-augmented software development lifecycle. Currently 
 - Branches: `story/<issue#>-short-slug`. PRs to `main` only — no direct pushes.
 - A PR merges only when CI (lint/test/traceability) is green, AI review threads are resolved,
   and a human approves. PR body must reference the issue ("Closes #N").
+- Every PR from `/start-coding` runs the AI-review convergence loop before handoff: scripted
+  rounds (`scripts/ai-review.sh <pr> "round N: …"`) iterate fix → re-review until the verdict
+  is "no blocking concerns". The loop is procedural via `/start-coding`;
+  `ai-review.yml` remains the per-push CI backstop. Findings stay advisory — humans decide.
 - A story's lifecycle is terminal at Done: follow-up work on a merged story gets its own
   issue; board automation ignores pushes to a closed story's branch.
 - Implementation starts only via `/start-coding <n>` — the single entry point. It checks

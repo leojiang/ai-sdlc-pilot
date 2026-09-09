@@ -45,8 +45,18 @@ check-gate-query:
 	 fi; \
 	 echo "check-gate-query: gate query copies identical"
 
+# scripts/ai-review.sh is the scripted half of /start-coding's AI-review
+# convergence loop (#32) — its invocation must never drift (the ad-hoc
+# hand-typed form did; see the story's context). Pin the refusal paths,
+# prompt assembly, and read-only allowlist against a stubbed claude so
+# lint/CI catch drift with no API call.
+.PHONY: check-ai-review
+check-ai-review:
+	@scripts/ai-review.fixture.sh
+
 lint:
 	@$(MAKE) --no-print-directory check-gate-query
+	@$(MAKE) --no-print-directory check-ai-review
 	@if [ -d backend ]; then cd backend && ./mvnw -q -DskipTests compile; fi
 	@if [ -d frontend ]; then $(MAKE) --no-print-directory check-pub-host && cd frontend && flutter pub get && flutter analyze; fi
 

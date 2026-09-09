@@ -1,5 +1,5 @@
 ---
-description: Start work on a story — mechanical Ready gate, sync main, create and push the story branch, then implement
+description: Start work on a story — mechanical Ready gate, sync main, create and push the story branch, implement, then converge the AI review before handoff
 argument-hint: <issue number>
 ---
 The single entry point for implementation work. Run the steps in order — the first
@@ -64,5 +64,24 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
    where applicable; `make lint` and `make test` must pass before each push. End by
    opening the PR to `main` whose body contains a closing keyword for the story
    ("Closes #$ARGUMENTS") — story-review.yml then moves the card to In review.
+
+6. AI-review convergence loop — mandatory, immediately after the PR exists
+   (opened in step 5, or an already-open PR this run just updated). The loop is
+   procedural, never ad-hoc: every round is `scripts/ai-review.sh`, the identical
+   scripted invocation, differing between rounds only in the quoted round-context
+   arg (never hand-type a variant — the #30 gate-query brace was hand-copy drift).
+   1. Round 1: `scripts/ai-review.sh <pr> "round 1: fresh review"` — run it and
+      read the output.
+   2. Fix every 🔴/🟡 finding (💬 findings are folded into nearby fixes or
+      explicitly dismissed with a reason in the PR body), commit, push.
+   3. Re-run with round context: `scripts/ai-review.sh <pr> "round N: verify
+      fixes for <one-line list of what round N-1 flagged and you changed> and
+      re-review fresh"` — then confirm `gh pr checks` shows the required checks
+      green.
+   4. Converged = verdict "no blocking concerns" + no unresolved 🔴/🟡 findings +
+      required checks green. Anything less and the loop continues.
+   5. Budget: after 10 rounds without convergence, STOP and report honestly what
+      remains — never rubber-stamp a round to exit the loop.
+   6. Hand the PR to the user as ready for human merge.
 
 Merging is never part of this command. The merge click belongs to a human, always.
