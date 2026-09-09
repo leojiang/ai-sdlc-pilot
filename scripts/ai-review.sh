@@ -59,10 +59,13 @@ PROMPT=$(
   }
 )
 RC=0
-printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
+REVIEW=$(printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
   --allowedTools "Read" "Grep" "Glob" \
   "Bash(gh pr diff *)" "Bash(gh pr view *)" "Bash(gh issue view *)" \
-  "Bash(git log *)" "Bash(git show *)" ||
+  "Bash(git log *)" "Bash(git show *)") ||
   RC=$?
-[ "$RC" -eq 0 ] ||
+if [ "$RC" -ne 0 ]; then
   die "claude exited $RC — the review round failed; there is no review to evaluate (auth failure, flag rejection, and crash are distinguishable only by this code)"
+fi
+[ -n "$REVIEW" ] || die "claude exited 0 but produced no review — a failed round, never an empty one"
+printf '%s\n' "$REVIEW"

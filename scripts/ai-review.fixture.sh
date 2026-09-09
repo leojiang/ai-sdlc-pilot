@@ -44,7 +44,7 @@ ln -s "$(command -v bash)" "$GITONLY/bash"
 ln -s "$(command -v git)" "$GITONLY/git"
 RC=0; OUT=$(cd "$NOTMP" && PATH="$GITONLY" "$SUBJECT" 7 2>&1) || RC=$?
 [ "$RC" -eq 1 ] || bad "claude-less run should exit 1, got $RC"
-case "$OUT" in *claude*) ok ;; *) bad "claude-less run must name claude/PATH, got: $OUT" ;; esac
+case "$OUT" in *claude\ not\ found*) ok ;; *) bad "claude-less run must say 'claude not found', got: $OUT" ;; esac
 
 # --- refusal: git not on PATH (message must not claim "not inside a repo") ---
 BASHONLY=$(mktemp -d)
@@ -132,5 +132,18 @@ grep -q "claude exited 1 —" "$BIN/err.txt" ||
   bad "failed round must explain claude's nonzero exit (with its code): $(cat "$BIN/err.txt")"
 ok
 [ -n "$STDOUT" ] && bad "failed round must not emit review stdout: $STDOUT" || ok
-rm -rf "$FAILBIN" "$BIN"
+
+# --- silent success: claude exits 0 with no output -----------------------------
+# Exit 0 + empty stdout is a failed round too, never an empty review (round-5 💬).
+SILENTBIN=$(mktemp -d)
+printf '#!/usr/bin/env bash\nexit 0\n' >"$SILENTBIN/claude"
+chmod +x "$SILENTBIN/claude"
+RC=0; STDOUT=$(cd "$HERE" && PATH="$SILENTBIN:$PATH" "$SUBJECT" 9 2>"$BIN/err.txt") || RC=$?
+[ "$RC" -eq 1 ] || bad "silent claude round should exit 1, got $RC"
+ok
+grep -q "produced no review" "$BIN/err.txt" ||
+  bad "silent round must be named a failed round: $(cat "$BIN/err.txt")"
+ok
+[ -n "$STDOUT" ] && bad "silent round must not emit review stdout: $STDOUT" || ok
+rm -rf "$FAILBIN" "$SILENTBIN" "$BIN"
 echo "check-ai-review: $N assertions pass (refusals, allowlist, assembly, stdout)"
