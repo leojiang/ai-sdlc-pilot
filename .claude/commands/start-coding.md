@@ -75,13 +75,14 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
    procedural, never ad-hoc: every round is `scripts/ai-review.sh`, the identical
    scripted invocation, differing between rounds only in the quoted round-context
    arg (never hand-type a variant — the #30 gate-query brace was hand-copy drift).
-   1. Round 1: `scripts/ai-review.sh <pr> "round 1: fresh review"` — run it and
-      read the output. A clean round 1 (no 🔴/🟡, verdict "no blocking concerns",
-      `gh pr checks` green) is already converged — skip straight to handoff below,
-      unless the story's own validation plan demands a witnessed iteration.
-      After every round, clean or not, append its number, invocation, and
-      outcome to a **Review-loop log** section in the PR body — the persisted
-      trail the In-review resume path continues.
+   1. A fresh loop opens with `scripts/ai-review.sh <pr> "round 1: fresh review"`;
+      a resumed loop opens at round N+1 per the In review bullet above. Run it
+      and read the output. A clean round 1 (no 🔴/🟡, verdict "no blocking
+      concerns", `gh pr checks` green) is already converged — skip straight to
+      handoff below, unless the story's own validation plan demands a witnessed
+      iteration. After every round, clean or not, append its number,
+      invocation, and outcome to a **Review-loop log** section in the PR body —
+      the persisted trail the In-review resume path continues.
    2. Fix every 🔴/🟡 finding (💬 findings are folded into nearby fixes or
       explicitly dismissed with a reason in the PR body), commit, push.
    3. Re-run with round context: `scripts/ai-review.sh <pr> "round N: verify

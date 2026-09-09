@@ -27,7 +27,7 @@ fi
 case "$1" in
   '' | *[!0-9]*) die "PR number must be an integer, got: $1" ;;
 esac
-PR=$1
+PR=$((10#$1)) # force decimal — 08 is 8, not invalid octal, so the -ge below stays valid
 [ "$PR" -ge 1 ] || die "PR number must be >= 1, got: $PR"
 shift
 

@@ -123,6 +123,14 @@ cmp -s "$BIN/expected-bare.txt" "$CAP_STDIN" ||
   bad "assembled prompt mismatch (no context): $(diff "$BIN/expected-bare.txt" "$CAP_STDIN" | head -20)"
 ok
 
+# --- leading-zero PR: 08 normalizes to 8 (decimal, not octal) ------------------
+run_stub 08
+[ "$RC" -eq 0 ] || bad "leading-zero PR should run (08 → 8), got $RC"
+ok
+grep -q "Review pull request #8 of this repository." "$CAP_STDIN" ||
+  bad "leading-zero PR must normalize to #8 in the prompt: $(head -1 "$CAP_STDIN")"
+ok
+
 # --- failed round: claude exits nonzero ---------------------------------------
 # Must die with a clear message, never surface as an empty review (round-2 💬).
 FAILBIN=$(mktemp -d)
