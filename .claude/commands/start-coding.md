@@ -42,8 +42,10 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
      above, switch to it, and push (the open PR picks it up; the card stays in
      review), then resume the loop at step 6 on that same PR — its number comes
      from `gh pr list --head <branch> --json number` (exactly one open PR is
-     expected; anything else, STOP and ask); only unrelated follow-up gets a
-     new issue
+     expected; anything else, STOP and ask), continuing round numbering from
+     the PR body's review-loop log (a resumed loop opens at `round N+1: fresh
+     review after resume`, never round 1 again); only unrelated follow-up
+     gets a new issue
    - **not on the board / Done** → STOP with guidance: follow-up work needs a new
      issue; an unboarded story needs boarding before it can be worked on
 
