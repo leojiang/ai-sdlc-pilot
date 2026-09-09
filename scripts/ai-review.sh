@@ -84,6 +84,6 @@ REVIEW=$(printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
 if [ "$RC" -ne 0 ]; then
   die "claude exited $RC — the review round failed; there is no review to evaluate (auth failure, flag rejection, and crash are distinguishable only by this code)"
 fi
-printf '%s' "$REVIEW" | grep -q '[^[:space:]]' ||
+[ -n "${REVIEW//[[:space:]]/}" ] ||
   die "claude exited 0 but produced no review — a failed round, never an empty one"
 printf '%s\n' "$REVIEW"

@@ -190,9 +190,15 @@ git -C "$UNREADABLE" init -q
 mkdir -p "$UNREADABLE/.claude/prompts"
 touch "$UNREADABLE/.claude/prompts/pr-review.md"
 chmod 000 "$UNREADABLE/.claude/prompts/pr-review.md"
-RC=0; OUT=$(cd "$UNREADABLE" && PATH="$BIN:$PATH" "$SUBJECT" 7 2>&1) || RC=$?
-[ "$RC" -eq 1 ] || bad "unreadable prompt file should exit 1, got $RC"
-ok
-case "$OUT" in *prompt\ not\ readable*) ok ;; *) bad "unreadable prompt must say 'prompt not readable', got: $OUT" ;; esac
+# chmod-000 only blocks non-root readers — skip (with a note) when lint runs
+# as root in a devcontainer, instead of failing spuriously.
+if [ "$(id -u)" -eq 0 ]; then
+  echo "  note - running as root: unreadable-prompt case skipped (root reads chmod-000 files)"
+else
+  RC=0; OUT=$(cd "$UNREADABLE" && PATH="$BIN:$PATH" "$SUBJECT" 7 2>&1) || RC=$?
+  [ "$RC" -eq 1 ] || bad "unreadable prompt file should exit 1, got $RC"
+  ok
+  case "$OUT" in *prompt\ not\ readable*) ok ;; *) bad "unreadable prompt must say 'prompt not readable', got: $OUT" ;; esac
+fi
 rm -rf "$FAILBIN" "$SILENTBIN" "$WSBIN" "$NOFILE" "$UNREADABLE" "$BIN"
 echo "check-ai-review: $N assertions pass (refusals, allowlist, assembly, stdout)"

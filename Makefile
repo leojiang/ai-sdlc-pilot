@@ -57,7 +57,12 @@ check-ai-review:
 	  echo "ERROR: /start-coding step 6 no longer invokes scripts/ai-review.sh —"; \
 	  echo "       the loop and the script must change together (check-gate-query class)"; \
 	  exit 1; }
-	@echo "check-ai-review: /start-coding still wired to scripts/ai-review.sh"
+	@if grep -q 'claude -p' .claude/commands/start-coding.md; then \
+	  echo "ERROR: /start-coding contains a hand-typed 'claude -p' invocation —"; \
+	  echo "       AI review goes through scripts/ai-review.sh only (drift class #30)"; \
+	  exit 1; \
+	fi
+	@echo "check-ai-review: /start-coding still wired to scripts/ai-review.sh (and free of hand-typed invocations)"
 
 lint:
 	@$(MAKE) --no-print-directory check-gate-query
