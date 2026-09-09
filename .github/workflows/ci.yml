@@ -6,6 +6,16 @@ permissions:
   contents: read
   pull-requests: write
 
+# Single source of truth for the closing-keyword pattern — consumed by the
+# traceability gate and pinned by the conventions job's accept/reject fixtures.
+# (The board workflows do NOT use this regex — they consume GitHub-resolved
+# closingIssuesReferences.) Colon and multi-space forms verified against GitHub's
+# parser (story #18, PR #23 experiment): closes: #N, Closes #N, Closes  #N all
+# resolve. URL-form refs also resolve but are intentionally rejected here —
+# team convention is the "#N" form; the conventions job pins that divergence.
+env:
+  CLOSING_KEYWORD_RE: '(^|[^a-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+#[0-9]+'
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -87,11 +97,9 @@ jobs:
         run: |
           set -euo pipefail
           BODY=$(gh pr view "$PR" --json body -q .body)
-          # Closing-keyword reference: word-boundary before the keyword (rejects
-          # "disclose #5"), whitespace (+optional colon) before the number (accepts
-          # "Closes  #16" / "closes: #16"). URL-form refs are not accepted — use
-          # the "#N" form per team convention.
-          echo "$BODY" | grep -qiE '(^|[^a-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+#[0-9]+' || {
+          # Pattern lives in the workflow-level CLOSING_KEYWORD_RE (single source;
+          # fixtures pin it in the conventions job)
+          echo "$BODY" | grep -qiE "$CLOSING_KEYWORD_RE" || {
             echo "::error::PR body must close a story issue with a closing keyword (e.g. 'Closes #1') — the board's In review/Done automation keys off closing references"; exit 1; }
 
   story-gate:
@@ -153,12 +161,63 @@ jobs:
                 echo "✅ story #$NUM at $ST — gate open" ;;
               Backlog)
                 echo "::error::story #$NUM is at Backlog — review it and promote it to Ready before merging"; BAD=1 ;;
+              Done)
+                # Reachable when a Done story is reopened or dragged — closed
+                # stories are filtered out above (state==OPEN), so ordinary
+                # follow-up PRs close nothing and pass as "not applicable"
+                echo "::error::story #$NUM is at Done — its lifecycle is terminal; open a follow-up issue for further work"; BAD=1 ;;
               *)
                 echo "::error::story #$NUM is not on the '$PROJECT_TITLE' board — add it and promote it to Ready before merging"; BAD=1 ;;
             esac
           done <<<"$STORIES"
           if [ "$BAD" = "1" ]; then exit 1; fi
           [ -n "$STORIES" ] || echo "no closing-referenced open stories from this repo — gate not applicable"
+
+  conventions:
+    # Pins the closing-keyword regex with accept/reject fixtures so the pattern
+    # can't silently drift (the traceability gate depends on it; the board
+    # workflows consume GitHub-resolved closing references instead)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Closing-keyword regex fixtures
+        run: |
+          set -euo pipefail
+          accept() { if ! echo "$1" | grep -qiE "$CLOSING_KEYWORD_RE"; then echo "::error::regex should ACCEPT: $1"; exit 1; fi; }
+          reject() { if   echo "$1" | grep -qiE "$CLOSING_KEYWORD_RE"; then echo "::error::regex should REJECT: $1"; exit 1; fi; }
+          # GitHub-resolver-verified forms (PR #23 experiment)
+          accept "Closes #16"
+          accept "closes: #16"
+          accept "Closes  #16"
+          accept "Fixes #3"
+          accept "resolved #7"
+          accept "This PR closes #9 and also fixes #10"
+          # Mentions and word-boundary traps must not pass
+          reject "disclose #5"
+          reject "context: see #9"
+          reject "This PR discloses issues close to #12"
+          reject "no reference at all"
+          # URL-form and owner/repo#N refs: GitHub's parser resolves both (the
+          # board moves), but traceability intentionally requires the bare "#N"
+          # form — the divergence is pinned here so it stays a documented choice
+          reject "Closes https://github.com/foo/bar/issues/9"
+          reject "Closes owner/repo#16"
+          # 'closes:#16' (no space): resolver-verified REJECTED by GitHub
+          # (PR #27 experiment) — aligned reject, not an unverified assumption
+          reject "closes:#16"
+          echo "✅ closing-keyword fixtures all pass"
+      - name: Heal-filter fixtures (story-done board sweep)
+        run: |
+          set -euo pipefail
+          OUT=$(jq -r --arg repo "leojiang/ai-sdlc-pilot" --arg f "Status" --arg done "Done" -f scripts/heal-filter.jq scripts/heal-filter.fixture.json)
+          # Two should-matches: a below-Done card AND a no-status card (terminal
+          # policy: closed+completed means Done however it's carded); five negatives
+          EXPECTED=$(printf 'HEAL_THIS\t42\nNO_STATUS\t48')
+          if [ "$OUT" != "$EXPECTED" ]; then
+            echo "::error::heal-filter fixture mismatch — expected exactly '$EXPECTED', got: $(echo "$OUT" | tr '\n' '|')"
+            exit 1
+          fi
+          echo "✅ heal-filter fixtures pass (two should-match selected; six negatives rejected)"
 
   triage:
     needs: [test]
