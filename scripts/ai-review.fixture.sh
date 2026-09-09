@@ -34,11 +34,25 @@ case "$OUT" in *git\ repository*) ok ;; *) bad "outside-repo run must name the g
 # --- refusal: claude not on PATH ---------------------------------------------
 NOTMP=$(mktemp -d)
 git -C "$NOTMP" init -q
-# /usr/bin:/bin has git and coreutils but no claude on macOS and CI runners.
-RC=0; OUT=$(cd "$NOTMP" && PATH=/usr/bin:/bin "$SUBJECT" 7 2>&1) || RC=$?
+# Deterministic absence: PATH holds ONLY bash + git (symlinked) — no claude can
+# be found wherever this runs, unlike the old /usr/bin:/bin assumption (a
+# machine with claude under /usr/bin made lint fail spuriously — round-1 💬
+# finding; bash must be present or the subject's `#!/usr/bin/env bash`
+# shebang can't resolve at all).
+GITONLY=$(mktemp -d)
+ln -s "$(command -v bash)" "$GITONLY/bash"
+ln -s "$(command -v git)" "$GITONLY/git"
+RC=0; OUT=$(cd "$NOTMP" && PATH="$GITONLY" "$SUBJECT" 7 2>&1) || RC=$?
 [ "$RC" -eq 1 ] || bad "claude-less run should exit 1, got $RC"
 case "$OUT" in *claude*) ok ;; *) bad "claude-less run must name claude/PATH, got: $OUT" ;; esac
-rm -rf "$TMP" "$NOTMP"
+
+# --- refusal: git not on PATH (message must not claim "not inside a repo") ---
+BASHONLY=$(mktemp -d)
+ln -s "$(command -v bash)" "$BASHONLY/bash"
+RC=0; OUT=$(cd "$NOTMP" && PATH="$BASHONLY" "$SUBJECT" 7 2>&1) || RC=$?
+[ "$RC" -eq 1 ] || bad "git-less run should exit 1, got $RC"
+case "$OUT" in *git\ not\ found*) ok ;; *) bad "git-less run must name the missing git binary, got: $OUT" ;; esac
+rm -rf "$TMP" "$NOTMP" "$GITONLY" "$BASHONLY"
 
 # --- happy paths against a stubbed claude, invoked from a repo subdir --------
 BIN=$(mktemp -d)

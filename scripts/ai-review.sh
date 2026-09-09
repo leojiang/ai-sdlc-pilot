@@ -26,6 +26,8 @@ shift
 
 # The review prompt is repo-relative, and the agent's workspace root should be
 # the repo toplevel however deep the caller sits.
+command -v git >/dev/null 2>&1 ||
+  die "git not found on PATH — ai-review.sh needs git to locate the repo"
 TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null) ||
   die "not inside a git repository — run from a checkout of the repo (the review prompt lives at .claude/prompts/pr-review.md)"
 command -v claude >/dev/null 2>&1 ||
