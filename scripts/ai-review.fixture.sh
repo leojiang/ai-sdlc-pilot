@@ -75,8 +75,8 @@ run_stub() { # <pr> [context...] -> captures stdout/stderr, sets RC
     PATH="$BIN:$PATH" "$SUBJECT" "$@" 2>"$BIN/err.txt") && RC=0 || RC=$?
 }
 
-# With round context: argv pinned set-wise (19 tokens: -p, --max-turns, 30,
-# --allowedTools + 8 allowlist entries, --disallowedTools + 6 denied write
+# With round context: argv pinned set-wise (31 tokens: -p, --max-turns, 30,
+# --allowedTools + 8 allowlist entries, --disallowedTools + 18 denied write
 # forms — order-free so cosmetic reorders pass, additions/removals/typos fail).
 run_stub 42 "round 1: fresh review" "round 2: verify fixes"
 [ "$RC" -eq 0 ] || { cat "$BIN/err.txt"; bad "stubbed happy path should exit 0, got $RC"; }
@@ -85,13 +85,17 @@ ok
 ok
 [ -s "$BIN/err.txt" ] && bad "happy path must print nothing to stderr: $(cat "$BIN/err.txt")" || ok
 LINES=$(wc -l <"$CAP_ARGS" | tr -d ' ')
-[ "$LINES" -eq 19 ] || bad "claude argv should have 19 tokens, got $LINES: $(cat "$CAP_ARGS")"
+[ "$LINES" -eq 31 ] || bad "claude argv should have 31 tokens, got $LINES: $(cat "$CAP_ARGS")"
 ok
 for token in '-p' '--max-turns' '30' '--allowedTools' 'Read' 'Grep' 'Glob' \
   'Bash(gh pr diff *)' 'Bash(gh pr view *)' 'Bash(gh issue view *)' \
   'Bash(git log *)' 'Bash(git show *)' \
   '--disallowedTools' 'Bash(gh pr comment *)' 'Bash(gh pr edit *)' 'Bash(gh pr merge *)' \
-  'Bash(gh issue comment *)' 'Bash(gh issue edit *)' 'Bash(gh issue create *)'; do
+  'Bash(gh pr create *)' 'Bash(gh pr close *)' 'Bash(gh pr ready *)' 'Bash(gh pr review *)' \
+  'Bash(gh issue comment *)' 'Bash(gh issue edit *)' 'Bash(gh issue create *)' \
+  'Bash(gh issue delete *)' 'Bash(gh issue develop *)' 'Bash(gh issue transfer *)' \
+  'Bash(gh issue reopen *)' 'Bash(gh issue lock *)' 'Bash(gh issue unlock *)' \
+  'Bash(gh issue pin *)' 'Bash(gh issue unpin *)'; do
   grep -qxF -e "$token" "$CAP_ARGS" || bad "claude argv missing token: $token (got: $(cat "$CAP_ARGS"))"
   ok
 done
@@ -161,5 +165,33 @@ grep -q "produced no review" "$BIN/err.txt" ||
   bad "silent round must be named a failed round: $(cat "$BIN/err.txt")"
 ok
 [ -n "$STDOUT" ] && bad "silent round must not emit review stdout: $STDOUT" || ok
-rm -rf "$FAILBIN" "$SILENTBIN" "$BIN"
+
+# --- whitespace-only output: also a failed round (round-9 💬) -------------------
+WSBIN=$(mktemp -d)
+printf '#!/usr/bin/env bash\necho "   "\n' >"$WSBIN/claude"
+chmod +x "$WSBIN/claude"
+RC=0; STDOUT=$(cd "$HERE" && PATH="$WSBIN:$PATH" "$SUBJECT" 9 2>"$BIN/err.txt") || RC=$?
+[ "$RC" -eq 1 ] || bad "whitespace-only claude round should exit 1, got $RC"
+ok
+grep -q "produced no review" "$BIN/err.txt" ||
+  bad "whitespace-only round must be named a failed round: $(cat "$BIN/err.txt")"
+ok
+
+# --- prompt-file refusals: not found / not readable (round-9 💬) ---------------
+NOFILE=$(mktemp -d)
+git -C "$NOFILE" init -q
+RC=0; OUT=$(cd "$NOFILE" && PATH="$BIN:$PATH" "$SUBJECT" 7 2>&1) || RC=$?
+[ "$RC" -eq 1 ] || bad "missing prompt file should exit 1, got $RC"
+ok
+case "$OUT" in *prompt\ not\ found*) ok ;; *) bad "missing prompt must say 'prompt not found', got: $OUT" ;; esac
+UNREADABLE=$(mktemp -d)
+git -C "$UNREADABLE" init -q
+mkdir -p "$UNREADABLE/.claude/prompts"
+touch "$UNREADABLE/.claude/prompts/pr-review.md"
+chmod 000 "$UNREADABLE/.claude/prompts/pr-review.md"
+RC=0; OUT=$(cd "$UNREADABLE" && PATH="$BIN:$PATH" "$SUBJECT" 7 2>&1) || RC=$?
+[ "$RC" -eq 1 ] || bad "unreadable prompt file should exit 1, got $RC"
+ok
+case "$OUT" in *prompt\ not\ readable*) ok ;; *) bad "unreadable prompt must say 'prompt not readable', got: $OUT" ;; esac
+rm -rf "$FAILBIN" "$SILENTBIN" "$WSBIN" "$NOFILE" "$UNREADABLE" "$BIN"
 echo "check-ai-review: $N assertions pass (refusals, allowlist, assembly, stdout)"

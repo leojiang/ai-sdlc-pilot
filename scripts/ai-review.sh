@@ -73,10 +73,15 @@ REVIEW=$(printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
   "Bash(gh pr diff *)" "Bash(gh pr view *)" "Bash(gh issue view *)" \
   "Bash(git log *)" "Bash(git show *)" \
   --disallowedTools "Bash(gh pr comment *)" "Bash(gh pr edit *)" "Bash(gh pr merge *)" \
-  "Bash(gh issue comment *)" "Bash(gh issue edit *)" "Bash(gh issue create *)") ||
+  "Bash(gh pr create *)" "Bash(gh pr close *)" "Bash(gh pr ready *)" "Bash(gh pr review *)" \
+  "Bash(gh issue comment *)" "Bash(gh issue edit *)" "Bash(gh issue create *)" \
+  "Bash(gh issue delete *)" "Bash(gh issue develop *)" "Bash(gh issue transfer *)" \
+  "Bash(gh issue reopen *)" "Bash(gh issue lock *)" "Bash(gh issue unlock *)" \
+  "Bash(gh issue pin *)" "Bash(gh issue unpin *)") ||
   RC=$?
 if [ "$RC" -ne 0 ]; then
   die "claude exited $RC — the review round failed; there is no review to evaluate (auth failure, flag rejection, and crash are distinguishable only by this code)"
 fi
-[ -n "$REVIEW" ] || die "claude exited 0 but produced no review — a failed round, never an empty one"
+printf '%s' "$REVIEW" | grep -q '[^[:space:]]' ||
+  die "claude exited 0 but produced no review — a failed round, never an empty one"
 printf '%s\n' "$REVIEW"
