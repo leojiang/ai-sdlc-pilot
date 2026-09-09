@@ -12,7 +12,7 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
 2. Board gate — check the card's Status (the `/story-status` query, coordinates derived
    so the command ports to other repos untouched):
    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner); OWNER=${REPO%/*}; NAME=${REPO#*/}
-   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ projectItems(first: 10){ nodes{ project{title} fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } } }' -f o=$OWNER -f r=$NAME -F n=$ARGUMENTS
+   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ state title projectItems(first: 10){ nodes{ project{title} fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } }' -f o=$OWNER -f r=$NAME -F n=$ARGUMENTS
    Read the value of the field named `Status` from the item on this repo's board — if
    items come back from more than one project, report the ambiguity instead of
    guessing. No `Status` value or no card at all = not on the board. Then:
@@ -23,14 +23,17 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
      `git ls-remote --heads origin "story/$ARGUMENTS-*"`
      (local listings miss never-fetched branches, and remote-tracking names carry an
      `origin/` prefix that `story/$ARGUMENTS-*` patterns don't match). Branch name =
-     the ref with `refs/heads/` stripped. If found: `git switch <branch>` when it
-     exists locally, else `git switch -c <branch> --track origin/<branch>`; if git
-     reports it is already checked out in another worktree, STOP and pass that
-     worktree path to the user (never switch with `--force`). After switching,
-     `git pull --ff-only` when the branch tracks a remote. Then skip to step 5.
-     If the remote has no such branch, check for a local-only one
-     (`git branch --list 'story/$ARGUMENTS-*'`) before falling through to steps 3-4
-     and creating it fresh.
+     the ref with `refs/heads/` stripped. If more than one ref matches, STOP and list
+     them — the user picks which branch is the story's (multi-branch stories exist in
+     this repo's own history; never pick arbitrarily). If exactly one: `git switch
+     <branch>` when it exists locally, else `git switch -c <branch> --track
+     origin/<branch>`; if git reports it is already checked out in another worktree,
+     STOP and pass that worktree path to the user (never switch with `--force`). After
+     switching, `git pull --ff-only` when the branch tracks a remote — if the pull
+     refuses (diverged local branch), STOP with its exact output. Then skip to step 5.
+     If the remote has no such branch but a local-only one exists
+     (`git branch --list 'story/$ARGUMENTS-*'`), switch to it and skip to step 5;
+     only otherwise fall through to steps 3-4 and create it fresh.
    - **Backlog** → STOP: "Card #$ARGUMENTS is at Backlog — review it and promote it to
      Ready first." Create no branch, write no code, wait for the user
    - **In review** → STOP starting new work — the story's PR already exists. To address

@@ -6,7 +6,8 @@ argument-hint: <issue number>
    are the source of truth.
 2. Read the code this story will touch (backend/ is Spring Boot, frontend/ is Flutter),
    to ground the plan in reality.
-3. Write docs/test-plans/issue-$ARGUMENTS-test-plan.md:
+3. If docs/test-plans/issue-$ARGUMENTS-test-plan.md already exists, STOP and ask the
+   user — a reviewed plan is never silently overwritten. Otherwise write it:
    - Objective + link to the story
    - Traceability table: acceptance criterion → planned test(s) → layer (unit/integration/E2E)
    - Risk-based priority: which failures would hurt most? Test those hardest.
