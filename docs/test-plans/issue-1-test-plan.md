@@ -94,5 +94,7 @@ Which failures would hurt most? Test those hardest.
 
 ## Sign-off
 
-Per team convention: a human reviews and edits this file, then comments **"test plan
-approved"** on #1. Implementation does not start until then.
+(Historical note — this section described the original convention, retired with #30:
+a plan is now reviewed as part of card review, and implementation starts via
+`/start-coding` once the card is promoted to Ready. #1 itself was approved under the
+old comment ritual before it was retired.)

@@ -25,7 +25,28 @@ bootstrap:
 	@if [ -d frontend ]; then cd frontend && flutter pub get; fi
 	@command -v pre-commit >/dev/null && pre-commit install || true
 
+# The board-gate GraphQL query is deliberately duplicated: start-coding.md runs it,
+# story-status.md documents it as the read-only inspection. Hand-copying a ~300-char
+# line drifted once (#30 review round 3: one extra closing brace — the command then
+# could not execute its own gate). Fail on any drift so the copies can only change
+# together, byte-identical.
+.PHONY: check-gate-query
+check-gate-query:
+	@a=$$(grep '^   gh api graphql' .claude/commands/story-status.md | sed 's/^ *//'); \
+	 b=$$(grep '^   gh api graphql' .claude/commands/start-coding.md | sed 's/^ *//'); \
+	 if [ -z "$$a" ] || [ -z "$$b" ]; then \
+	   echo "ERROR: check-gate-query could not find the gate query in both command files"; \
+	   exit 1; \
+	 fi; \
+	 if [ "$$a" != "$$b" ]; then \
+	   echo "ERROR: the board-gate query drifted between story-status.md and start-coding.md"; \
+	   echo "       (#30 round 3 shipped an extra brace this way). Update both together."; \
+	   exit 1; \
+	 fi; \
+	 echo "check-gate-query: gate query copies identical"
+
 lint:
+	@$(MAKE) --no-print-directory check-gate-query
 	@if [ -d backend ]; then cd backend && ./mvnw -q -DskipTests compile; fi
 	@if [ -d frontend ]; then $(MAKE) --no-print-directory check-pub-host && cd frontend && flutter pub get && flutter analyze; fi
 
