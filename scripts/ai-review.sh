@@ -18,7 +18,8 @@
 set -euo pipefail
 # Without errexit inheritance a cat failure inside the $(…) prompt assembly
 # below can be masked by the trailing echo on older bash; no-op where
-# unsupported (pre-4.1), where the -r pre-check remains the guard.
+# unsupported (introduced in bash 4.4 — macOS stock 3.2 is in the no-op
+# range), where the -r pre-check remains the guard.
 shopt -s inherit_errexit 2>/dev/null || true
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -77,7 +78,8 @@ REVIEW=$(printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
   "Bash(gh issue comment *)" "Bash(gh issue edit *)" "Bash(gh issue create *)" \
   "Bash(gh issue delete *)" "Bash(gh issue develop *)" "Bash(gh issue transfer *)" \
   "Bash(gh issue reopen *)" "Bash(gh issue lock *)" "Bash(gh issue unlock *)" \
-  "Bash(gh issue pin *)" "Bash(gh issue unpin *)") ||
+  "Bash(gh issue pin *)" "Bash(gh issue unpin *)" \
+  "Bash(gh issue add-sub-issue *)" "Bash(gh issue remove-sub-issue *)") ||
   RC=$?
 if [ "$RC" -ne 0 ]; then
   die "claude exited $RC — the review round failed; there is no review to evaluate (auth failure, flag rejection, and crash are distinguishable only by this code)"

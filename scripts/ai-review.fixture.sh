@@ -75,8 +75,8 @@ run_stub() { # <pr> [context...] -> captures stdout/stderr, sets RC
     PATH="$BIN:$PATH" "$SUBJECT" "$@" 2>"$BIN/err.txt") && RC=0 || RC=$?
 }
 
-# With round context: argv pinned set-wise (31 tokens: -p, --max-turns, 30,
-# --allowedTools + 8 allowlist entries, --disallowedTools + 18 denied write
+# With round context: argv pinned set-wise (33 tokens: -p, --max-turns, 30,
+# --allowedTools + 8 allowlist entries, --disallowedTools + 20 denied write
 # forms — order-free so cosmetic reorders pass, additions/removals/typos fail).
 run_stub 42 "round 1: fresh review" "round 2: verify fixes"
 [ "$RC" -eq 0 ] || { cat "$BIN/err.txt"; bad "stubbed happy path should exit 0, got $RC"; }
@@ -85,7 +85,7 @@ ok
 ok
 [ -s "$BIN/err.txt" ] && bad "happy path must print nothing to stderr: $(cat "$BIN/err.txt")" || ok
 LINES=$(wc -l <"$CAP_ARGS" | tr -d ' ')
-[ "$LINES" -eq 31 ] || bad "claude argv should have 31 tokens, got $LINES: $(cat "$CAP_ARGS")"
+[ "$LINES" -eq 33 ] || bad "claude argv should have 33 tokens, got $LINES: $(cat "$CAP_ARGS")"
 ok
 for token in '-p' '--max-turns' '30' '--allowedTools' 'Read' 'Grep' 'Glob' \
   'Bash(gh pr diff *)' 'Bash(gh pr view *)' 'Bash(gh issue view *)' \
@@ -95,7 +95,8 @@ for token in '-p' '--max-turns' '30' '--allowedTools' 'Read' 'Grep' 'Glob' \
   'Bash(gh issue comment *)' 'Bash(gh issue edit *)' 'Bash(gh issue create *)' \
   'Bash(gh issue delete *)' 'Bash(gh issue develop *)' 'Bash(gh issue transfer *)' \
   'Bash(gh issue reopen *)' 'Bash(gh issue lock *)' 'Bash(gh issue unlock *)' \
-  'Bash(gh issue pin *)' 'Bash(gh issue unpin *)'; do
+  'Bash(gh issue pin *)' 'Bash(gh issue unpin *)' \
+  'Bash(gh issue add-sub-issue *)' 'Bash(gh issue remove-sub-issue *)'; do
   grep -qxF -e "$token" "$CAP_ARGS" || bad "claude argv missing token: $token (got: $(cat "$CAP_ARGS"))"
   ok
 done
