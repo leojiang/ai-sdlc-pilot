@@ -118,7 +118,7 @@ jobs:
           done < <(jq -c --arg repo "$GITHUB_REPOSITORY" '.data.repository.pullRequest.closingIssuesReferences.nodes[]
                           | select(.repository.nameWithOwner == $repo)
                           | select(any(.labels.nodes[].name; . == "story"))' <<<"$RES")
-          if [ "$MOVED" != "1" ]; then echo "no story issues from this repo closed by this PR — board unchanged"; fi
+          if [ "$MOVED" != "1" ]; then echo "main loop moved nothing (closing refs were non-story, cross-repo, or absent)"; fi
           # Heal sweep (closes the concurrency-group drop window): a superseded
           # pending run can be CANCELLED (grey, not red), leaving its closed
           # issues' cards below Done with no other healer. Every surviving run
@@ -149,7 +149,7 @@ jobs:
               # Merge-adjacent re-check (repo idiom, cf. story-status/story-review):
               # the page walk's state read may be stale — an issue reopened inside
               # the window must not be force-moved to terminal Done
-              if [ "$(gh issue view "$HNUM" -R "$GITHUB_REPOSITORY" --json state,stateReason -q '.state + "/" + .stateReason')" != "CLOSED/COMPLETED" ]; then
+              if [ "$(gh issue view "$HNUM" -R "$GITHUB_REPOSITORY" --json state,stateReason -q '"\(.state)/\(.stateReason // "")"')" != "CLOSED/COMPLETED" ]; then
                 echo "skip heal: issue #$HNUM is no longer CLOSED/COMPLETED"; continue
               fi
               gql -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!){ updateProjectV2ItemFieldValue(input:{projectId:$p itemId:$i fieldId:$f value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }' -f p="$PROJ" -f i="$HID" -f f="$FIELD" -f o="$OPTION" > /dev/null

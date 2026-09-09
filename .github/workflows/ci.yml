@@ -217,7 +217,7 @@ jobs:
             echo "::error::heal-filter fixture mismatch — expected exactly '$EXPECTED', got: $(echo "$OUT" | tr '\n' '|')"
             exit 1
           fi
-          echo "✅ heal-filter fixtures pass (two should-match selected; five negatives rejected)"
+          echo "✅ heal-filter fixtures pass (two should-match selected; six negatives rejected)"
 
   triage:
     needs: [test]

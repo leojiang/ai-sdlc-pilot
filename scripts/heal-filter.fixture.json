@@ -9,7 +9,8 @@
           {"id": "ALREADY_DONE", "fieldValues": {"nodes": [{"name": "Done", "field": {"name": "Status"}}]}, "content": {"number": 45, "state": "CLOSED", "stateReason": "COMPLETED", "labels": {"nodes": [{"name": "story"}]}, "repository": {"nameWithOwner": "leojiang/ai-sdlc-pilot"}}},
           {"id": "STILL_OPEN", "fieldValues": {"nodes": [{"name": "In review", "field": {"name": "Status"}}]}, "content": {"number": 46, "state": "OPEN", "stateReason": "REOPENED", "labels": {"nodes": [{"name": "story"}]}, "repository": {"nameWithOwner": "leojiang/ai-sdlc-pilot"}}},
           {"id": "FOREIGN_REPO", "fieldValues": {"nodes": [{"name": "In review", "field": {"name": "Status"}}]}, "content": {"number": 47, "state": "CLOSED", "stateReason": "COMPLETED", "labels": {"nodes": [{"name": "story"}]}, "repository": {"nameWithOwner": "other/repo"}}},
-          {"id": "NO_STATUS", "fieldValues": {"nodes": []}, "content": {"number": 48, "state": "CLOSED", "stateReason": "COMPLETED", "labels": {"nodes": [{"name": "story"}]}, "repository": {"nameWithOwner": "leojiang/ai-sdlc-pilot"}}}
+          {"id": "NO_STATUS", "fieldValues": {"nodes": []}, "content": {"number": 48, "state": "CLOSED", "stateReason": "COMPLETED", "labels": {"nodes": [{"name": "story"}]}, "repository": {"nameWithOwner": "leojiang/ai-sdlc-pilot"}}},
+          {"id": "PR_ITEM", "fieldValues": {"nodes": []}, "content": {}}
         ]
       }
     }
