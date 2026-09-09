@@ -82,7 +82,11 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
       handoff below, unless the story's own validation plan demands a witnessed
       iteration. After every round, clean or not, append its number,
       invocation, and outcome to a **Review-loop log** section in the PR body —
-      the persisted trail the In-review resume path continues.
+      the persisted trail the In-review resume path continues. The per-push CI
+      backstop (`ai-review.yml`) reviews every mid-loop push; treat its
+      findings as loop findings — fold their fixes into the next round's entry
+      or log them as their own entries marked `backstop` — and before handoff
+      the log must cover every fix commit on the PR.
    2. Fix every 🔴/🟡 finding (💬 findings are folded into nearby fixes or
       explicitly dismissed with a reason in the PR body), commit, push.
    3. Re-run with round context: `scripts/ai-review.sh <pr> "round N: verify
