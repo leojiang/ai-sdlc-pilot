@@ -162,6 +162,9 @@ jobs:
               Backlog)
                 echo "::error::story #$NUM is at Backlog — review it and promote it to Ready before merging"; BAD=1 ;;
               Done)
+                # Reachable when a Done story is reopened or dragged — closed
+                # stories are filtered out above (state==OPEN), so ordinary
+                # follow-up PRs close nothing and pass as "not applicable"
                 echo "::error::story #$NUM is at Done — its lifecycle is terminal; open a follow-up issue for further work"; BAD=1 ;;
               *)
                 echo "::error::story #$NUM is not on the '$PROJECT_TITLE' board — add it and promote it to Ready before merging"; BAD=1 ;;
