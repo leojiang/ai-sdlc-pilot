@@ -51,4 +51,5 @@ cd "$TOPLEVEL"
 } | claude -p --max-turns 30 \
   --allowedTools "Read" "Grep" "Glob" \
   "Bash(gh pr diff *)" "Bash(gh pr view *)" "Bash(gh issue view *)" \
-  "Bash(git log *)" "Bash(git show *)"
+  "Bash(git log *)" "Bash(git show *)" ||
+  die "claude exited nonzero — the review round failed; there is no review to evaluate"

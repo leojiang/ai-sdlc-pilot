@@ -120,5 +120,17 @@ cmp -s "$BIN/expected-bare.txt" "$CAP_STDIN" ||
   bad "assembled prompt mismatch (no context): $(diff "$BIN/expected-bare.txt" "$CAP_STDIN" | head -20)"
 ok
 
-rm -rf "$BIN"
+# --- failed round: claude exits nonzero ---------------------------------------
+# Must die with a clear message, never surface as an empty review (round-2 💬).
+FAILBIN=$(mktemp -d)
+printf '#!/usr/bin/env bash\nexit 1\n' >"$FAILBIN/claude"
+chmod +x "$FAILBIN/claude"
+RC=0; STDOUT=$(cd "$HERE" && PATH="$FAILBIN:$PATH" "$SUBJECT" 9 2>"$BIN/err.txt") || RC=$?
+[ "$RC" -eq 1 ] || bad "failed claude round should exit 1, got $RC"
+ok
+grep -q "claude exited nonzero" "$BIN/err.txt" ||
+  bad "failed round must explain claude's nonzero exit: $(cat "$BIN/err.txt")"
+ok
+[ -n "$STDOUT" ] && bad "failed round must not emit review stdout: $STDOUT" || ok
+rm -rf "$FAILBIN" "$BIN"
 echo "check-ai-review: $N assertions pass (refusals, allowlist, assembly, stdout)"
