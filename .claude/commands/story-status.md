@@ -4,8 +4,9 @@ argument-hint: <issue number>
 ---
 Check, report, and change nothing:
 
-1. Board status — run:
-   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ state title projectItems(first: 10){ nodes{ fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } }' -f o=leojiang -f r=ai-sdlc-pilot -F n=$ARGUMENTS
+1. Board status — run (coordinates derived, so the command ports to other repos untouched):
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner); OWNER=${REPO%/*}; NAME=${REPO#*/}
+   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ state title projectItems(first: 10){ nodes{ fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } }' -f o=$OWNER -f r=$NAME -F n=$ARGUMENTS
    Report the issue state and the card's Status field value (or "not on the board").
 
 2. Test plan — check whether docs/test-plans/issue-$ARGUMENTS-test-plan.md exists.

@@ -9,23 +9,33 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
    Missing issue → STOP. Closed issue → STOP and say so: a story's lifecycle is terminal
    at Done, follow-up work gets its own issue (CLAUDE.md).
 
-2. Board gate — check the card's Status (the `/story-status` query):
-   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ projectItems(first: 10){ nodes{ fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } } }' -f o=leojiang -f r=ai-sdlc-pilot -F n=$ARGUMENTS
+2. Board gate — check the card's Status (the `/story-status` query, coordinates derived
+   so the command ports to other repos untouched):
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner); OWNER=${REPO%/*}; NAME=${REPO#*/}
+   gh api graphql -f query='query($o: String!, $r: String!, $n: Int!){ repository(owner: $o, name: $r){ issue(number: $n){ projectItems(first: 10){ nodes{ fieldValues(first: 10){ nodes{ ... on ProjectV2ItemFieldSingleSelectValue{ name field{ ... on ProjectV2SingleSelectField{ name } } } } } } } } } } }' -f o=$OWNER -f r=$NAME -F n=$ARGUMENTS
    Read the value of the field named `Status` (no `Status` value or no card at all =
    not on the board). Then:
    - **Ready** → continue with step 3
-   - **In progress** → resume mode: `git switch` to the existing `story/$ARGUMENTS-*`
-     branch if present (`git branch --list 'story/$ARGUMENTS-*'`), else continue with
-     step 3 to create it; skip to step 5 either way
+   - **In progress** → resume mode: first apply the same clean-tree rule as step 3
+     (`git status --porcelain` must print nothing — dirty → STOP and show it). Find the
+     branch with `git branch --all --list 'story/$ARGUMENTS-*'`; if it exists locally,
+     `git switch <branch>` — if git reports it is already checked out in another
+     worktree, STOP and pass that worktree path to the user (never switch with `--force`).
+     After switching, `git pull --ff-only` if the branch tracks a remote (a branch with
+     no upstream is local-only — leave it). Then skip to step 5. If no branch exists
+     anywhere, fall through to steps 3-4 and create it.
    - **Backlog** → STOP: "Card #$ARGUMENTS is at Backlog — review it and promote it to
      Ready first." Create no branch, write no code, wait for the user
    - **not on the board / Done / In review** → STOP with guidance: follow-up work needs
      a new issue; an unboarded story needs boarding before it can be worked on
 
-3. Sync: `git checkout main && git pull --ff-only`.
-   If it fails — dirty working tree, untracked files in the way, diverged history —
-   STOP and show the exact git output. Never stash, force, reset, or clean on the
-   user's behalf.
+3. Sync: first require a clean tree — `git status --porcelain` must print nothing.
+   If it prints anything (modified, staged, or untracked files — including
+   non-conflicting ones, which `git checkout` would silently carry along), STOP and show
+   the output: the user's working tree is not yours to touch, and carried-along files
+   end up swept into the PR. Then `git checkout main && git pull --ff-only`; if git
+   still refuses (e.g. diverged history), STOP with its exact output. Never stash,
+   force, reset, or clean on the user's behalf.
 
 4. Branch: `git checkout -b story/$ARGUMENTS-<short-slug>` (match the story to a
    1-3 word slug), then `git push -u origin story/$ARGUMENTS-<short-slug>`.

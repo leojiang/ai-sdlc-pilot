@@ -13,6 +13,8 @@ argument-hint: <issue number>
    - Negative and boundary cases, explicitly listed
    - Test data / environments needed; what stays manual vs automated
 4. Post a comment: `gh issue comment $ARGUMENTS --body "Test plan drafted (ai-draft):
-   docs/test-plans/issue-$ARGUMENTS-test-plan.md — needs human review."`
-5. A human reviews and edits the file, then comments "test plan approved".
-   Implementation doesn't start until then.
+   docs/test-plans/issue-$ARGUMENTS-test-plan.md — see card review."`
+5. The plan is reviewed as part of card review (Ready promotion) — there is no approval
+   comment and no separate ritual. Implementation starts via `/start-coding`, which gates
+   on the card being Ready; if the plan needs rework, the reviewer says so before
+   promoting the card.
