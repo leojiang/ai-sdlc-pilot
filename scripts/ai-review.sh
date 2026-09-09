@@ -12,6 +12,10 @@
 # and opens PRs from them, so a fork PR never reaches this script; CI's
 # ai-review.yml is the layer that refuses fork-authored content.
 set -euo pipefail
+# Without errexit inheritance a cat failure inside the $(…) prompt assembly
+# below can be masked by the trailing echo on older bash; no-op where
+# unsupported (pre-4.1), where the -r pre-check remains the guard.
+shopt -s inherit_errexit 2>/dev/null || true
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 usage() { echo "usage: scripts/ai-review.sh <pr-number> [round-context...]" >&2; }
