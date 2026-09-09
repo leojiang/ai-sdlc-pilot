@@ -41,9 +41,10 @@ PROMPT_FILE="$TOPLEVEL/.claude/prompts/pr-review.md"
 [ -r "$PROMPT_FILE" ] || die "review prompt not readable: $PROMPT_FILE"
 cd "$TOPLEVEL"
 
-# Assemble first, pipe only claude: an assembly failure (e.g. cat dying on an
-# unreadable file) must abort here with its own message, never leak into the
-# pipeline where the || die below would misattribute it as a claude failure.
+# Assemble first, pipe only claude: an assembly failure (e.g. cat dying on a
+# file that lost readability between the check and here) must abort with its
+# own message, never leak into the pipeline where the die below would
+# misattribute it as a claude failure.
 PROMPT=$(
   {
     echo "Review pull request #$PR of this repository."
@@ -57,7 +58,7 @@ PROMPT=$(
       done
     fi
   }
-)
+) || die "prompt assembly failed — cannot read $PROMPT_FILE"
 RC=0
 REVIEW=$(printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
   --allowedTools "Read" "Grep" "Glob" \

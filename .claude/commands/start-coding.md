@@ -44,8 +44,8 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
      from `gh pr list --head <branch> --json number` (exactly one open PR is
      expected; anything else, STOP and ask), continuing round numbering from
      the PR body's review-loop log (a resumed loop opens at `round N+1: fresh
-     review after resume`, never round 1 again); only unrelated follow-up
-     gets a new issue
+     review after resume`, never round 1 again; no log in the body → STOP and
+     ask); only unrelated follow-up gets a new issue
    - **not on the board / Done** → STOP with guidance: follow-up work needs a new
      issue; an unboarded story needs boarding before it can be worked on
 
@@ -79,6 +79,9 @@ check that fails stops the whole command. Never skip step 1-2 "just to get start
       read the output. A clean round 1 (no 🔴/🟡, verdict "no blocking concerns",
       `gh pr checks` green) is already converged — skip straight to handoff below,
       unless the story's own validation plan demands a witnessed iteration.
+      After every round, clean or not, append its number, invocation, and
+      outcome to a **Review-loop log** section in the PR body — the persisted
+      trail the In-review resume path continues.
    2. Fix every 🔴/🟡 finding (💬 findings are folded into nearby fixes or
       explicitly dismissed with a reason in the PR body), commit, push.
    3. Re-run with round context: `scripts/ai-review.sh <pr> "round N: verify

@@ -114,7 +114,10 @@ ok
 {
   echo "Review pull request #7 of this repository."
   echo
-  cat "$PROMPT_FILE"
+  # Same normalization the subject applies (command substitution strips
+  # trailing newlines; printf re-adds exactly one) — pinning our assembly,
+  # not the prompt file's trailing-newline hygiene.
+  printf '%s\n' "$(cat "$PROMPT_FILE")"
 } >"$BIN/expected-bare.txt"
 cmp -s "$BIN/expected-bare.txt" "$CAP_STDIN" ||
   bad "assembled prompt mismatch (no context): $(diff "$BIN/expected-bare.txt" "$CAP_STDIN" | head -20)"
