@@ -67,6 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ]; then
+            echo "::warning::AI review skipped: ANTHROPIC_AUTH_TOKEN secret not set — AI-review gate OPEN (no review comments will be posted)"
             echo "⚠️ AI review skipped: ANTHROPIC_AUTH_TOKEN secret not set" > review.md
             exit 0
           fi
@@ -77,8 +78,22 @@ jobs:
             echo "⚠️ AI review skipped: PR #$PR_NUMBER originates from fork $HEAD_OWNER — refusing to run the agent on untrusted content." > review.md
             exit 0
           fi
+          # Tool grants mirror scripts/ai-review.sh exactly — the check-ai-review-tools
+          # Makefile guard fails lint/CI if they drift (the #32 class: a wide
+          # "Bash(gh pr *)" allowlist with no write-denials). --settings isolates
+          # the review session from dev-session grants in .claude/settings.json.
           claude -p "$(cat prompt.txt)" \
-            --allowedTools "Read" "Grep" "Glob" "Bash(gh pr *)" "Bash(gh issue view *)" \
+            --settings "$GITHUB_WORKSPACE/.claude/settings.review.json" \
+            --allowedTools "Read" "Grep" "Glob" \
+            "Bash(gh pr diff *)" "Bash(gh pr view *)" "Bash(gh issue view *)" \
+            "Bash(git log *)" "Bash(git show *)" \
+            --disallowedTools "Bash(gh pr comment *)" "Bash(gh pr edit *)" "Bash(gh pr merge *)" \
+            "Bash(gh pr create *)" "Bash(gh pr close *)" "Bash(gh pr ready *)" "Bash(gh pr review *)" \
+            "Bash(gh issue comment *)" "Bash(gh issue edit *)" "Bash(gh issue create *)" \
+            "Bash(gh issue delete *)" "Bash(gh issue develop *)" "Bash(gh issue transfer *)" \
+            "Bash(gh issue reopen *)" "Bash(gh issue lock *)" "Bash(gh issue unlock *)" \
+            "Bash(gh issue pin *)" "Bash(gh issue unpin *)" \
+            "Bash(gh issue add-sub-issue *)" "Bash(gh issue remove-sub-issue *)" \
             --max-turns 30 > review.md
 
       - name: Post review comment

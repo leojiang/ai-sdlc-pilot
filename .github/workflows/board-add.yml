@@ -47,6 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::PROJECT_TOKEN secret not set — issue #$ISSUE_NUMBER NOT added to board; story stays unboarded (cannot pass the Ready gate)"
             echo "⚠️ PROJECT_TOKEN secret not set — issue #$ISSUE_NUMBER not added to board"; exit 0
           fi
           gql() {

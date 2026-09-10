@@ -49,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::PROJECT_TOKEN secret not set — no Done moves for PR #$PR_NUMBER; card stays below Done"
             echo "⚠️ PROJECT_TOKEN secret not set — no Done moves for PR #$PR_NUMBER"; exit 0
           fi
           REPO_NAME="${GITHUB_REPOSITORY#*/}"

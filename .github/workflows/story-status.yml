@@ -33,6 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::PROJECT_TOKEN secret not set — board status NOT updated; branch push did not move the card to In progress"
             echo "⚠️ PROJECT_TOKEN secret not set — board status not updated"; exit 0
           fi
           NUM="${GITHUB_REF_NAME#story/}"; NUM="${NUM%%-*}"

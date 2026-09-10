@@ -75,9 +75,10 @@ run_stub() { # <pr> [context...] -> captures stdout/stderr, sets RC
     PATH="$BIN:$PATH" "$SUBJECT" "$@" 2>"$BIN/err.txt") && RC=0 || RC=$?
 }
 
-# With round context: argv pinned set-wise (33 tokens: -p, --max-turns, 30,
-# --allowedTools + 8 allowlist entries, --disallowedTools + 20 denied write
-# forms — order-free so cosmetic reorders pass, additions/removals/typos fail).
+# With round context: argv pinned set-wise (35 tokens: -p, --max-turns, 30,
+# --settings + review-settings path, --allowedTools + 8 allowlist entries,
+# --disallowedTools + 20 denied write forms — order-free so cosmetic reorders
+# pass, additions/removals/typos fail).
 run_stub 42 "round 1: fresh review" "round 2: verify fixes"
 [ "$RC" -eq 0 ] || { cat "$BIN/err.txt"; bad "stubbed happy path should exit 0, got $RC"; }
 ok
@@ -85,9 +86,10 @@ ok
 ok
 [ -s "$BIN/err.txt" ] && bad "happy path must print nothing to stderr: $(cat "$BIN/err.txt")" || ok
 LINES=$(wc -l <"$CAP_ARGS" | tr -d ' ')
-[ "$LINES" -eq 33 ] || bad "claude argv should have 33 tokens, got $LINES: $(cat "$CAP_ARGS")"
+[ "$LINES" -eq 35 ] || bad "claude argv should have 35 tokens, got $LINES: $(cat "$CAP_ARGS")"
 ok
-for token in '-p' '--max-turns' '30' '--allowedTools' 'Read' 'Grep' 'Glob' \
+for token in '-p' '--max-turns' '30' '--settings' "$REPO/.claude/settings.review.json" \
+  '--allowedTools' 'Read' 'Grep' 'Glob' \
   'Bash(gh pr diff *)' 'Bash(gh pr view *)' 'Bash(gh issue view *)' \
   'Bash(git log *)' 'Bash(git show *)' \
   '--disallowedTools' 'Bash(gh pr comment *)' 'Bash(gh pr edit *)' 'Bash(gh pr merge *)' \
@@ -200,5 +202,18 @@ else
   ok
   case "$OUT" in *prompt\ not\ readable*) ok ;; *) bad "unreadable prompt must say 'prompt not readable', got: $OUT" ;; esac
 fi
+# --- refusal: review settings not found ----------------------------------------
+# The review session must run against .claude/settings.review.json — dev-session
+# settings (.claude/settings.json) allow `Bash(gh issue *)` writes. A missing
+# file refuses loudly instead of falling back to the dev-session grant.
+NOSET=$(mktemp -d)
+git -C "$NOSET" init -q
+mkdir -p "$NOSET/.claude/prompts"
+: > "$NOSET/.claude/prompts/pr-review.md"
+RC=0; OUT=$(cd "$NOSET" && PATH="$BIN:$PATH" "$SUBJECT" 7 2>&1) || RC=$?
+[ "$RC" -eq 1 ] || bad "missing review settings should exit 1, got $RC"
+ok
+case "$OUT" in *review\ settings*) ok ;; *) bad "missing settings must say 'review settings', got: $OUT" ;; esac
+rm -rf "$NOSET"
 rm -rf "$FAILBIN" "$SILENTBIN" "$WSBIN" "$NOFILE" "$UNREADABLE" "$BIN"
 echo "check-ai-review: $N assertions pass (refusals, allowlist, assembly, stdout)"
