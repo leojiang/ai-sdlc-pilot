@@ -50,7 +50,7 @@ check-gate-query:
 # hand-typed form did; see the story's context). Pin the refusal paths,
 # prompt assembly, and read-only allowlist against a stubbed claude so
 # lint/CI catch drift with no API call.
-.PHONY: check-ai-review
+.PHONY: check-ai-review check-ai-review-tools check-review-settings
 check-ai-review:
 	@scripts/ai-review.fixture.sh
 	@grep -qF 'scripts/ai-review.sh <pr>' .claude/commands/start-coding.md || { \
@@ -64,9 +64,49 @@ check-ai-review:
 	fi
 	@echo "check-ai-review: /start-coding still wired to scripts/ai-review.sh (and free of hand-typed invocations)"
 
+# ai-review.yml (CI) must grant exactly the same tool set as scripts/ai-review.sh —
+# the #32 class of asymmetry shipped a wide "Bash(gh pr *)" allowlist with no
+# write-denials. Extract the quoted tool tokens from each claude invocation block
+# (--allowedTools line through the last continuation) and compare as sorted sets,
+# so the two can only change together.
+.PHONY: check-ai-review-tools
+check-ai-review-tools:
+	@SH=$$(awk '/^[[:space:]]*--allowedTools/{f=1} f{print} f&&!/\\$$/{exit}' scripts/ai-review.sh | grep -oE '"[A-Za-z]+(\([^)]*\))?"' | sort); \
+	 CI=$$(awk '/^[[:space:]]*--allowedTools/{f=1} f{print} f&&!/\\$$/{exit}' .github/workflows/ai-review.yml | grep -oE '"[A-Za-z]+(\([^)]*\))?"' | sort); \
+	 if [ "$$SH" != "$$CI" ]; then \
+	   echo "ERROR: AI-review tool grants drifted between scripts/ai-review.sh and .github/workflows/ai-review.yml"; \
+	   echo "--- scripts/ai-review.sh:"; printf '%s\n' "$$SH"; \
+	   echo "--- .github/workflows/ai-review.yml:"; printf '%s\n' "$$CI"; \
+	   exit 1; \
+	 fi; \
+	 echo "check-ai-review-tools: CI tool grants match scripts/ai-review.sh"
+
+# The review session runs against .claude/settings.review.json (--settings) so
+# dev-session grants (.claude/settings.json allows `Bash(gh issue *)`) cannot
+# widen it. Its deny list must cover every --disallowedTools form in
+# scripts/ai-review.sh — deny wins over allow at every settings layer, so the
+# settings file is the second line of defense if the CLI list ever drifts.
+.PHONY: check-review-settings
+check-review-settings:
+	@jq -e '.permissions.allow and (.permissions.deny | length > 0)' .claude/settings.review.json >/dev/null 2>&1 || { \
+	  echo "ERROR: .claude/settings.review.json missing or malformed"; exit 1; }; \
+	DENYF=$$(mktemp); DISF=$$(mktemp); \
+	trap 'rm -f "$$DENYF" "$$DISF"' EXIT; \
+	jq -r '.permissions.deny[]' .claude/settings.review.json | sort > "$$DENYF"; \
+	awk '/^[[:space:]]*--disallowedTools/{f=1} f{print} f&&!/\\$$/{exit}' scripts/ai-review.sh | grep -oE '"[A-Za-z]+(\([^)]*\))?"' | tr -d '"' | sort > "$$DISF"; \
+	MISSING=$$(grep -Fxv -f "$$DENYF" "$$DISF" || true); \
+	if [ -n "$$MISSING" ]; then \
+	  echo "ERROR: .claude/settings.review.json does not deny these tools from scripts/ai-review.sh:"; \
+	  printf '%s\n' "$$MISSING"; \
+	  exit 1; \
+	fi; \
+	echo "check-review-settings: review settings deny-list covers scripts/ai-review.sh disallowedTools"
+
 lint:
 	@$(MAKE) --no-print-directory check-gate-query
 	@$(MAKE) --no-print-directory check-ai-review
+	@$(MAKE) --no-print-directory check-ai-review-tools
+	@$(MAKE) --no-print-directory check-review-settings
 	@if [ -d backend ]; then cd backend && ./mvnw -q -DskipTests compile; fi
 	@if [ -d frontend ]; then $(MAKE) --no-print-directory check-pub-host && cd frontend && flutter pub get && flutter analyze; fi
 

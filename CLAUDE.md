@@ -59,4 +59,35 @@ Every story contains these sections:
 - `gh issue view <n>` — read a story
 
 ## Architecture map
-(No code yet — this is a workflow pilot. Fill this in when real code lands.)
+
+```
+ai-sdlc-pilot/
+├── .claude/                 # Claude Code: workflow commands + prompts
+│   ├── commands/            # /story-draft, /story-refine, /story-status,
+│   │                        # /test-plan, /gen-tests, /start-coding
+│   ├── prompts/pr-review.md # AI review instructions (advisory output)
+│   ├── settings.json        # dev-session permissions
+│   └── settings.review.json # review-session minimal permissions (read-only)
+├── scripts/
+│   ├── ai-review.sh         # scripted AI-review round (read-only tool grants)
+│   ├── ai-review.fixture.sh # pins ai-review.sh's contract (no API call)
+│   └── heal-filter.jq       # story-done heal-sweep filter (fixture-pinned)
+├── .github/
+│   ├── actions/project-lookup/ # shared board project/field/option lookup
+│   └── workflows/              # board automation + CI gates
+├── backend/                 # Spring Boot 3.5 (Java 17, Maven wrapper):
+│                            #   GET /actuator/health, localhost CORS
+├── frontend/                # Flutter (Android/iOS/web/macOS):
+│                            #   smoke screen calls the health endpoint
+└── docs/test-plans/         # per-story test plans (issue-N-test-plan.md)
+```
+
+Board lifecycle is event-driven — the only manual move is the human Ready
+promotion: `board-add` (story → Backlog), `story-status` (story/* branch push →
+In progress, Ready-gated), `story-review` (non-draft PR closing the story → In
+review), `story-done` (merge → Done + heal sweep).
+
+CI gates live in `.github/workflows/ci.yml` (lint / test / traceability /
+story-gate / conventions / triage); `ai-review.yml` is the per-push AI review
+backstop. AI output is advisory everywhere — humans promote Ready and click
+merge.

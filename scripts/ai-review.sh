@@ -8,10 +8,11 @@
 #
 # Usage: scripts/ai-review.sh <pr-number> [round-context...]
 # Blocking; prints the review markdown to stdout. The allowlist below is
-# read-only, but Claude Code layers project/user settings on top of --allowedTools
-# (this repo's .claude/settings.json allows `Bash(gh issue *)`), so
-# --disallowedTools denies the obvious write forms; user-level settings can
-# never be fully excluded — review output is advisory either way.
+# read-only, and the review session runs against its own minimal-permission
+# settings (.claude/settings.review.json via --settings), so the dev-session
+# project settings (.claude/settings.json allows `Bash(gh issue *)`) cannot
+# widen the review grant beyond --disallowedTools' write-denials; user-level
+# settings can never be fully excluded — review output is advisory either way.
 # Scope: same-repo PRs — the /start-coding path pushes story branches to origin
 # and opens PRs from them, so a fork PR never reaches this script; CI's
 # ai-review.yml is the layer that refuses fork-authored content.
@@ -48,6 +49,8 @@ command -v claude >/dev/null 2>&1 ||
 PROMPT_FILE="$TOPLEVEL/.claude/prompts/pr-review.md"
 [ -f "$PROMPT_FILE" ] || die "review prompt not found: $PROMPT_FILE"
 [ -r "$PROMPT_FILE" ] || die "review prompt not readable: $PROMPT_FILE"
+SETTINGS_FILE="$TOPLEVEL/.claude/settings.review.json"
+[ -r "$SETTINGS_FILE" ] || die "review settings not found or not readable: $SETTINGS_FILE"
 cd "$TOPLEVEL"
 
 # Assemble first, pipe only claude: an assembly failure (e.g. cat dying on a
@@ -70,6 +73,7 @@ PROMPT=$(
 ) || die "prompt assembly failed — cannot read $PROMPT_FILE"
 RC=0
 REVIEW=$(printf '%s\n' "$PROMPT" | claude -p --max-turns 30 \
+  --settings "$SETTINGS_FILE" \
   --allowedTools "Read" "Grep" "Glob" \
   "Bash(gh pr diff *)" "Bash(gh pr view *)" "Bash(gh issue view *)" \
   "Bash(git log *)" "Bash(git show *)" \

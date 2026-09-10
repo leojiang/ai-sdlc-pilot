@@ -49,6 +49,17 @@ make bootstrap   # backend deps (via wrapper) + frontend packages + git hooks
 instructions if `PUB_HOSTED_URL` doesn't match the host the lockfile is
 resolved against.
 
+### CI secrets (board + AI gates)
+
+The board workflows and CI gates need two secrets; without them they **run
+open** — they emit a visible `::warning::` on the Checks tab and skip, but do
+not block. Configure them before relying on the gates:
+
+| Secret | Used by | Effect when missing |
+|---|---|---|
+| `PROJECT_TOKEN` | board-add / story-status / story-review / story-done / story-gate | Board never moves; the merge-layer Ready gate stays open |
+| `ANTHROPIC_AUTH_TOKEN` (+ `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_*_MODEL`) | ai-review / triage | No AI review comments; no failure triage |
+
 ### Running the backend
 
 ```bash

@@ -37,6 +37,7 @@ runs:
       run: |
         set -euo pipefail
         if [ -z "${GH_TOKEN:-}" ]; then
+          echo "::warning::project-lookup: no token provided — board workflow cannot resolve project/field/option; board writes below will skip"
           echo "⚠️ project-lookup: no token provided — skipping"
           echo "PROJECT_LOOKUP=skipped" >> "$GITHUB_ENV"
           exit 0
