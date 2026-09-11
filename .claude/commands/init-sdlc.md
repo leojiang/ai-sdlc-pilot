@@ -393,19 +393,30 @@ github.com → Projects → New project → add Status field manually). Do not S
 whole init — the rest of the setup can proceed without the board, though board
 automation won't fire until it's configured.
 
-5. **Disable built-in project workflows that race our custom automation.**
+5. **Configure Board view with Status columns (manual step).**
+   Print clear instructions for the user:
+
+   > **Manual step required — configure the board view:**
+   > 1. Go to your GitHub Project board
+   > 2. Click the **View** dropdown (top toolbar) → Select **Board** (instead of Table)
+   > 3. Once in Board view, click **Group by** (top toolbar) → Select **Status**
+   > 4. Verify the columns appear: Backlog | Ready | In progress | In review | Done
+   >
+   > The board must be in Board view grouped by Status for the automation to work.
+   > Without this configuration, the workflow automation won't move cards between columns.
+
+6. **Disable built-in project workflows that race our custom automation.**
    The GitHub Projects API does not support toggling built-in workflows, so print
    clear manual instructions for the user:
 
    > **Important — manual step required:**
-   > Go to your project board → ⋯ menu → **Settings** → **Workflows** and:
+   > Go to your project board → **⋯** menu (top right) → **Settings** → **Workflows** and:
    > - **Disable** "Pull request linked to issue" — our `story-review.yml` handles this with a Ready gate
    > - **Disable** "Pull request merged" — our `story-done.yml` handles this deterministically with a heal sweep
    > - **Keep enabled**: "Item added to project", "Item closed", "Auto-close issue"
    >
    > If the built-in workflows stay on, they race our custom workflows and can
-   > move cards to the wrong status. This is the one manual step that can't be
-   > automated.
+   > move cards to the wrong status.
 
    Also query the project's current workflow state to confirm what needs changing.
    Try the organization query first; if the owner is a personal account, fall back
@@ -540,23 +551,37 @@ Then ask: "Paste your ANTHROPIC_AUTH_TOKEN (or type 'skip' to set it later):"
 
 ### 10c. ANTHROPIC_BASE_URL (optional — non-Anthropic endpoints only)
 
-Ask: "Are you using a non-Anthropic-compatible endpoint (e.g., GLM)? If yes, paste the
-base URL. If using Anthropic directly, type 'skip':"
+Always ask this:
+
+Tell the user:
+> If you're using Anthropic's API directly, skip this. If using a compatible endpoint
+> (e.g., GLM, or a local proxy), provide the base URL.
+
+Ask: "Paste your ANTHROPIC_BASE_URL (or type 'skip' if using Anthropic directly):"
 
 - If the user provides a URL: `echo "<value>" | gh secret set ANTHROPIC_BASE_URL`
-- If skip: continue.
+  Then verify with `gh secret list`. Proceed to Phase 10d.
+- If skip: continue to Phase 11 (skip Phase 10d).
 
 ### 10d. Model overrides (optional — custom endpoints only)
 
-Only ask this if the user set ANTHROPIC_BASE_URL in 10c. Otherwise skip entirely.
+Only ask this if the user set ANTHROPIC_BASE_URL in Phase 10c (didn't skip it).
 
-Ask: "Does your endpoint remap model names? If yes, provide the model IDs for each
-(or 'skip' for any you don't need):"
+Tell the user:
+> Some endpoints use different model names. If your endpoint remaps model IDs,
+> provide them here. Otherwise, the defaults from Anthropic will be used.
 
-For each one the user provides:
+Ask for each model (user can skip any):
+- "Model ID for Claude Sonnet (or 'skip'):"
+- "Model ID for Claude Haiku (or 'skip'):"
+- "Model ID for Claude Opus (or 'skip'):"
+
+For each one provided:
 - `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_SONNET_MODEL`
 - `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_HAIKU_MODEL`
 - `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_OPUS_MODEL`
+
+If all are skipped or user skipped ANTHROPIC_BASE_URL, proceed to Phase 11.
 
 ### 10e. Summary
 
