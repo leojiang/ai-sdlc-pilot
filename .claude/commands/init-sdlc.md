@@ -316,6 +316,11 @@ source of truth. This file mirrors the pilot repo's proven settings: required st
 checks (lint, test, story-gate), enforce admins, dismiss stale reviews, required linear
 history, required conversation resolution, no force pushes, no deletions.
 
+Branch protection rules are stored in `.github/branch-protection.json` — the single
+source of truth. This file mirrors the pilot repo's proven settings: required status
+checks (lint, test, story-gate), enforce admins, dismiss stale reviews, required linear
+history, required conversation resolution, no force pushes, no deletions.
+
 If the repo is **private**, skip this phase and print:
 > Branch protection requires GitHub Pro/Team for private repos. The rules are saved
 > in `.github/branch-protection.json` — apply them manually after upgrading, or switch
