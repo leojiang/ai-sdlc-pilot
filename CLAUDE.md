@@ -13,6 +13,8 @@ humans decide everything. Set up with `/init-sdlc`; customize for your stack.
 - Branches: `story/<issue#>-short-slug`. PRs to `main` only — no direct pushes.
 - A PR merges only when CI (lint/test/traceability) is green, AI review threads are resolved,
   and a human approves. PR body must reference the issue ("Closes #N").
+  - **AI review only runs on story PRs:** if a PR doesn't reference an issue (no "Closes #N"), 
+    AI review is skipped (indicating manual/non-story code, which doesn't need AI feedback).
 - Every PR from `/start-coding` runs the AI-review convergence loop before handoff: scripted
   rounds (`scripts/ai-review.sh <pr> "round N: …"`) iterate fix → re-review until the verdict
   is "no blocking concerns". The loop is procedural via `/start-coding`;

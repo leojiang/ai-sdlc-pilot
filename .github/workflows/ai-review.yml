@@ -46,6 +46,19 @@ jobs:
           WS: ${{ github.workspace }}
         run: printf '{"projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$WS" > "$HOME/.claude.json"
 
+      - name: Check if PR references a story issue
+        run: |
+          set -euo pipefail
+          BODY=$(gh pr view "$PR_NUMBER" --json body -q .body)
+          # Must match the closing-keyword pattern (Closes #N, Fixes #N, etc.)
+          if echo "$BODY" | grep -qiE '(^|[^a-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]+#[0-9]+'; then
+            echo "✅ PR references a story issue — proceeding with AI review"
+          else
+            echo "⚠️ PR does not reference a story issue (no 'Closes #N' in body) — skipping AI review"
+            echo "AI review skipped: PR not connected to a story issue" > review.md
+            exit 0
+          fi
+
       - name: Fork guard
         run: |
           set -euo pipefail
