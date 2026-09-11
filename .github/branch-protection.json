@@ -4,6 +4,7 @@
     "contexts": [
       "lint",
       "test",
+      "traceability",
       "story-gate"
     ]
   },

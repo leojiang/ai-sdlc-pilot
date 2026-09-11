@@ -86,7 +86,6 @@ them exactly as they exist in this repo:
 - `.github/PULL_REQUEST_TEMPLATE.md`
 - `.github/actions/project-lookup/action.yml`
 - `.github/workflows/ai-review.yml`
-- `.github/workflows/deploy.yml`
 - `scripts/ai-review.sh`
 - `scripts/ai-review.fixture.sh`
 - `scripts/heal-filter.jq`
@@ -202,23 +201,21 @@ body:
 
 **`docs/test-plans/.gitkeep`** — Create the empty directory.
 
-## Phase 5 — Clean up pilot-specific content
+## Phase 5 — Clean up non-framework content
 
-Delete files and directories that belong to the pilot, not the framework.
-Before deleting, confirm with the user: "I'm about to remove pilot-specific files
-(backend/, frontend/, pilot test plans, etc.). Confirm?"
+Check for and remove any files that don't belong to the framework. The template
+repo ships clean, but users who forked an older version may have leftover files.
 
-Delete:
-- `backend/` directory (unless the user chose Spring Boot AND wants to keep the scaffold)
-- `frontend/` directory (unless the user chose Flutter AND wants to keep the scaffold)
-- `docs/test-plans/issue-1-test-plan.md`
-- `docs/test-plans/issue-30-test-plan.md`
-- `docs/test-plans/issue-32-test-plan.md`
+If any of the following exist, delete them (skip silently if absent):
+- `backend/`, `frontend/` directories (leftover scaffolds from the pilot)
+- `docs/test-plans/issue-*.md` (pilot-specific test plans)
 - `docs/screenshots/` directory
-- `ONBOARDING.md` (if it exists — pilot-specific)
+- `ONBOARDING.md`
 - `.claude/settings.local.json` (machine-specific, not part of template)
-- Any `.idea/` directories under backend/ or frontend/
-- Any `*.iml` files
+- Any `.idea/` directories or `*.iml` files
+
+Also remove any other files the user doesn't recognize as theirs — ask before
+deleting anything unexpected.
 
 Do NOT delete:
 - `.claude/commands/init-sdlc.md` (this command itself — useful for reference)
@@ -268,14 +265,17 @@ automation won't fire until it's configured.
    > move cards to the wrong status. This is the one manual step that can't be
    > automated.
 
-   Also query the project's current workflow state to confirm what needs changing:
+   Also query the project's current workflow state to confirm what needs changing.
+   Try the organization query first; if the owner is a personal account, fall back
+   to the user query (same pattern as `project-lookup/action.yml`):
    ```
    gh api graphql -f query='query($login: String!, $n: Int!) {
-     user(login: $login) { projectV2(number: $n) {
+     organization(login: $login) { projectV2(number: $n) {
        workflows(first: 20) { nodes { name enabled } }
      } }
    }' -f login=<owner> -F n=<project-number>
    ```
+   If that errors (not an org), retry with `user(login: ...)` instead.
    Show the user the current state so they can see exactly which toggles to flip.
 
 ## Phase 7 — Create labels
@@ -310,6 +310,11 @@ Commit and push now so the branch is available for protection rules.
    force-pushing: `git push -u origin main --force`.)
 
 ## Phase 9 — Branch protection (public repos only)
+
+Branch protection rules are stored in `.github/branch-protection.json` — the single
+source of truth. This file mirrors the pilot repo's proven settings: required status
+checks (lint, test, story-gate), enforce admins, dismiss stale reviews, required linear
+history, required conversation resolution, no force pushes, no deletions.
 
 Branch protection rules are stored in `.github/branch-protection.json` — the single
 source of truth. This file mirrors the pilot repo's proven settings: required status

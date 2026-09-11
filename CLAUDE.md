@@ -26,12 +26,12 @@ humans decide everything. Set up with `/init-sdlc`; customize for your stack.
   reviewed as part of card review. CI backs the gate up — Backlog → In progress is
   refused on branch push, and PRs do not move Backlog cards to In review.
 
-### Board lifecycle (SDLC Pilot project)
+### Board lifecycle
 Status moves are automatic consequences of verifiable events — the only manual move is the first one:
 - **Ready** — a human promotes the story after review
 - **In progress** — first push of the `story/<issue#>-*` branch (`.github/workflows/story-status.yml`) — Ready stories only: a Backlog card is refused until a human promotes it
 - **In review** — a non-draft PR closes the story (on open, or on a body edit that adds the closing ref — `.github/workflows/story-review.yml`)
-- **Done** — a PR closing the story merges (`.github/workflows/story-done.yml`); the issue auto-closes (GitHub built-in). A story closed as completed without a merge is healed to Done by the next story-done run — closed-as-completed means Done, however it closed. (Healing covers carded stories; never-boarded closed stories are a known residual — #25.)
+- **Done** — a PR closing the story merges (`.github/workflows/story-done.yml`); the issue auto-closes (GitHub built-in). A story closed as completed without a merge is healed to Done by the next story-done run — closed-as-completed means Done, however it closed. (Healing covers carded stories; never-boarded closed stories are a known edge case — see story-done.yml comments.)
 
 ### Definition of Done
 A story is done when its PR merges, and all of the following held at merge time:
