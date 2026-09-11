@@ -290,7 +290,26 @@ gh label create needs-expansion --description "Raw brief; CI will expand it"  --
 gh label create flaky          --description "Quarantined flaky test"         --color F9D0C4
 ```
 
-## Phase 8 — Branch protection (public repos only)
+## Phase 8 — Commit and push
+
+Branch protection (Phase 9) requires the `main` branch to exist on the remote.
+Commit and push now so the branch is available for protection rules.
+
+1. Run `make lint` to verify the framework-level checks pass before committing.
+   If lint fails, fix the issue first — do not commit broken files.
+
+2. Stage and commit:
+   ```
+   git add -A
+   git commit -m "bootstrap: AI-augmented SDLC framework for <project name>"
+   ```
+
+3. Push: `git push -u origin main`
+   (If this is a fresh repo and `gh repo create` already pushed an empty commit,
+   the histories may diverge. In that case, confirm with the user before
+   force-pushing: `git push -u origin main --force`.)
+
+## Phase 9 — Branch protection (public repos only)
 
 Branch protection rules are stored in `.github/branch-protection.json` — the single
 source of truth. This file mirrors the pilot repo's proven settings: required status
@@ -322,7 +341,7 @@ If this fails (e.g., insufficient permissions), print the contents of
 The user can customize the rules later by editing `.github/branch-protection.json`
 and re-applying with the same `gh api` command.
 
-## Phase 9 — Secrets guidance
+## Phase 10 — Secrets guidance
 
 Secrets cannot be set silently. Guide the user through each one:
 
@@ -348,46 +367,36 @@ Secrets cannot be set silently. Guide the user through each one:
 Tell the user: "The board workflows and AI review will skip gracefully if these secrets
 are missing — they emit warnings but don't block. You can set them now or later."
 
-## Phase 10 — Initial commit and verification
+## Phase 11 — Verification and next steps
 
-1. Stage and commit everything:
-   ```
-   git add -A
-   git commit -m "bootstrap: AI-augmented SDLC framework for <project name>"
-   ```
-2. Push: `git push -u origin main`
-   (If this is a fresh repo, the push may need `--force` if gh repo create already
-   pushed an empty commit — confirm with the user before force-pushing.)
+Run final verification:
+- `gh project list --owner <owner>` — should show the board
+- `gh label list` — should show all 4 labels
+- If public: `gh api repos/<owner>/<repo>/branches/main/protection` — should return the rules
 
-3. Run verification checks:
-   - `make lint` — should pass (at least the framework-level checks)
-   - `gh project list --owner <owner>` — should show the board
-   - `gh label list` — should show all 4 labels
-   - If public: `gh api repos/<owner>/<repo>/branches/main/protection` — should return the rules
+Print the **"What's next"** summary:
+```
+✅ Project "<project name>" is set up with the AI-augmented SDLC framework.
 
-4. Print the **"What's next"** summary:
-   ```
-   ✅ Project "<project name>" is set up with the AI-augmented SDLC framework.
+Secrets to configure (if not done above):
+  gh secret set PROJECT_TOKEN        # PAT with project scope — board automation
+  gh secret set ANTHROPIC_AUTH_TOKEN  # AI model API key — AI review + triage
 
-   Secrets to configure (if not done above):
-     gh secret set PROJECT_TOKEN        # PAT with project scope — board automation
-     gh secret set ANTHROPIC_AUTH_TOKEN  # AI model API key — AI review + triage
+Your first story:
+  claude
+  > /story-draft "<one-paragraph feature brief>"
+  # Review the draft → confirm → issue created with story + ai-draft labels
+  # Go to the Project board → promote the card from Backlog to Ready
 
-   Your first story:
-     claude
-     > /story-draft "<one-paragraph feature brief>"
-     # Review the draft → confirm → issue created with story + ai-draft labels
-     # Go to the Project board → promote the card from Backlog to Ready
+Start coding:
+  > /start-coding <issue-number>
+  # Gate-checks Ready → syncs main → branches → implements → opens PR
 
-   Start coding:
-     > /start-coding <issue-number>
-     # Gate-checks Ready → syncs main → branches → implements → opens PR
-
-   Everyday commands:
-     make lint          # must pass before pushing
-     make test          # must pass before pushing
-     /story-status <n>  # check where a story stands on the board
-   ```
+Everyday commands:
+  make lint          # must pass before pushing
+  make test          # must pass before pushing
+  /story-status <n>  # check where a story stands on the board
+```
 
 Never: create issues, draft stories, or start implementation during init. The setup
 is complete when the framework files are committed and the GitHub resources exist.
