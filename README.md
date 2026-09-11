@@ -1,24 +1,51 @@
 # ai-sdlc-pilot
 
-Pilot repo for the AI-augmented SDLC workflow: GitHub Issues (stories) + Claude Code (AI agent).
+Pilot repo and **reusable template** for the AI-augmented SDLC workflow: GitHub Issues
+(stories) + GitHub Projects (board) + GitHub Actions (CI/CD) + Claude Code (AI agent).
 
-## Try it
+**Core principle:** AI drafts everything, humans decide everything.
+
+## Start your own project
+
+Clone this repo, then run the interactive setup command:
+
+```bash
+git clone https://github.com/leojiang/ai-sdlc-pilot.git my-project
+cd my-project
+rm -rf .git && git init    # clean history — start fresh
+claude
+> /init-sdlc "My Project Name"
+```
+
+The `/init-sdlc` command guides you through everything:
+- Prerequisite checks (gh, git, stack-specific tools)
+- GitHub repo creation (or use an existing one)
+- Framework file customization for your tech stack
+- GitHub Project board creation with the Status field (Backlog → Ready → In progress → In review → Done)
+- Labels, branch protection, and secrets setup
+- Initial commit
+
+**Note:** Public repos are recommended — GitHub Free cannot enforce branch protection
+rules (required reviews, required status checks) on private repos. See the setup
+command for details.
+
+## Try the pilot workflow
 
 ```bash
 claude
-```
-```
-/story-draft "<one-paragraph feature brief>"
+> /story-draft "<one-paragraph feature brief>"
 ```
 
 AI drafts the story → you review and confirm → it's created with `story` + `ai-draft` labels →
-a human reviews it in the browser before it counts as Ready.
+a human reviews it in the browser and promotes it to Ready on the board.
 
 ## Files that matter
 
 - `CLAUDE.md` — conventions + the story template (read by humans and the AI)
+- `.claude/commands/init-sdlc.md` — the framework setup command
 - `.claude/commands/story-draft.md` — the story-drafting workflow
 - `.claude/commands/story-refine.md` — Definition-of-Ready check
+- `.claude/commands/start-coding.md` — the implementation entry point (gate-checks, branch, implement, AI review)
 
 ## Development
 
