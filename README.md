@@ -271,7 +271,7 @@ This section walks through a complete development cycle, from drafting a story t
   - Follow-up work gets its own issue and PR
   - Link the new story to the original with a comment if needed
 
-- **If enhancement requested:** Same process — new story, new PR
+- **If enhancement requested:** Same process — new story, new PR 
 
 ### Useful Commands Reference
 
