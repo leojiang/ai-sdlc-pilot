@@ -393,19 +393,29 @@ github.com → Projects → New project → add Status field manually). Do not S
 whole init — the rest of the setup can proceed without the board, though board
 automation won't fire until it's configured.
 
-5. **Disable built-in project workflows that race our custom automation.**
+5. **Switch board view to Board layout (manual step — gh CLI doesn't support this yet).**
+   Print clear instructions for the user:
+
+   > **Manual step required:**
+   > Go to your GitHub Project board → Click the **View** dropdown (top toolbar) 
+   > → Select **Board** (instead of Table)
+   > 
+   > The project starts in Table view. Switch it to **Board** view so the Status
+   > field displays as columns (Backlog | Ready | In progress | In review | Done).
+   > This view is required for the board automation to work properly.
+
+6. **Disable built-in project workflows that race our custom automation.**
    The GitHub Projects API does not support toggling built-in workflows, so print
    clear manual instructions for the user:
 
    > **Important — manual step required:**
-   > Go to your project board → ⋯ menu → **Settings** → **Workflows** and:
+   > Go to your project board → **⋯** menu (top right) → **Settings** → **Workflows** and:
    > - **Disable** "Pull request linked to issue" — our `story-review.yml` handles this with a Ready gate
    > - **Disable** "Pull request merged" — our `story-done.yml` handles this deterministically with a heal sweep
    > - **Keep enabled**: "Item added to project", "Item closed", "Auto-close issue"
    >
    > If the built-in workflows stay on, they race our custom workflows and can
-   > move cards to the wrong status. This is the one manual step that can't be
-   > automated.
+   > move cards to the wrong status.
 
    Also query the project's current workflow state to confirm what needs changing.
    Try the organization query first; if the owner is a personal account, fall back
