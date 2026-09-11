@@ -364,7 +364,31 @@ Do NOT delete:
 - Any file listed in Phase 4 sections a-d
 - The `.git/` directory
 
-## Phase 6 — Create GitHub Project board
+## Phase 6 — Commit and push (MUST happen before project board creation)
+
+The GitHub Project board needs a committed and pushed repository to link to.
+The board will not connect properly if the repo hasn't been pushed to remote yet.
+
+1. Verify the framework files are ready:
+   ```bash
+   make lint
+   ```
+   If lint fails, fix the issues before proceeding.
+
+2. Stage and commit:
+   ```bash
+   git add -A
+   git commit -m "bootstrap: AI-augmented SDLC framework for <project-name>"
+   ```
+
+3. Push to remote:
+   ```bash
+   git push -u origin main
+   ```
+
+If the push fails, STOP and ask the user to fix authentication/permissions issues.
+
+## Phase 7 — Create GitHub Project board
 
 Tell the user: "I'm about to create a GitHub Project board and link it to your repo.
 This requires the `project` scope on your gh token." Confirm before proceeding.
@@ -431,7 +455,7 @@ automation won't fire until it's configured.
    If that errors (not an org), retry with `user(login: ...)` instead.
    Show the user the current state so they can see exactly which toggles to flip.
 
-## Phase 7 — Create labels
+## Phase 8 — Create labels
 
 Create the 4 required labels (skip with a note if they already exist — `gh label create`
 errors on duplicates, so check first with `gh label list --json name -q '.[].name'`):
@@ -442,25 +466,6 @@ gh label create ai-draft       --description "AI-drafted; needs human review" --
 gh label create needs-expansion --description "Raw brief; CI will expand it"  --color FBCA04
 gh label create flaky          --description "Quarantined flaky test"         --color F9D0C4
 ```
-
-## Phase 8 — Commit and push
-
-Branch protection (Phase 9) requires the `main` branch to exist on the remote.
-Commit and push now so the branch is available for protection rules.
-
-1. Run `make lint` to verify the framework-level checks pass before committing.
-   If lint fails, fix the issue first — do not commit broken files.
-
-2. Stage and commit:
-   ```
-   git add -A
-   git commit -m "bootstrap: AI-augmented SDLC framework for <project name>"
-   ```
-
-3. Push: `git push -u origin main`
-   (If this is a fresh repo and `gh repo create` already pushed an empty commit,
-   the histories may diverge. In that case, confirm with the user before
-   force-pushing: `git push -u origin main --force`.)
 
 ## Phase 9 — Branch protection (public repos only)
 
