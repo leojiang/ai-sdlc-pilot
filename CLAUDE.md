@@ -1,6 +1,7 @@
-# ai-sdlc-pilot
+# AI-Augmented SDLC Template
 
-Pilot repository for our AI-augmented software development lifecycle. Currently validating the AI story-drafting workflow (GitHub Issues + Claude Code) before rolling it out to real project repos.
+Reusable framework for AI-augmented software development: AI drafts everything,
+humans decide everything. Set up with `/init-sdlc`; customize for your stack.
 
 ## Team conventions
 
@@ -61,25 +62,23 @@ Every story contains these sections:
 ## Architecture map
 
 ```
-ai-sdlc-pilot/
-├── .claude/                 # Claude Code: workflow commands + prompts
-│   ├── commands/            # /story-draft, /story-refine, /story-status,
-│   │                        # /test-plan, /gen-tests, /start-coding
-│   ├── prompts/pr-review.md # AI review instructions (advisory output)
-│   ├── settings.json        # dev-session permissions
-│   └── settings.review.json # review-session minimal permissions (read-only)
+<project>/
+├── .claude/                    # Claude Code: workflow commands + prompts
+│   ├── commands/               # /init-sdlc, /story-draft, /story-refine,
+│   │                           # /story-status, /test-plan, /gen-tests, /start-coding
+│   ├── prompts/pr-review.md    # AI review instructions (advisory output)
+│   ├── settings.json           # dev-session permissions
+│   └── settings.review.json    # review-session minimal permissions (read-only)
 ├── scripts/
-│   ├── ai-review.sh         # scripted AI-review round (read-only tool grants)
-│   ├── ai-review.fixture.sh # pins ai-review.sh's contract (no API call)
-│   └── heal-filter.jq       # story-done heal-sweep filter (fixture-pinned)
+│   ├── ai-review.sh            # scripted AI-review round (read-only tool grants)
+│   ├── ai-review.fixture.sh    # pins ai-review.sh's contract (no API call)
+│   └── heal-filter.jq          # story-done heal-sweep filter (fixture-pinned)
 ├── .github/
-│   ├── actions/project-lookup/ # shared board project/field/option lookup
-│   └── workflows/              # board automation + CI gates
-├── backend/                 # Spring Boot 3.5 (Java 17, Maven wrapper):
-│                            #   GET /actuator/health, localhost CORS
-├── frontend/                # Flutter (Android/iOS/web/macOS):
-│                            #   smoke screen calls the health endpoint
-└── docs/test-plans/         # per-story test plans (issue-N-test-plan.md)
+│   ├── actions/project-lookup/  # shared board project/field/option lookup
+│   ├── workflows/               # board automation + CI gates
+│   └── branch-protection.json   # branch protection rules (applied by /init-sdlc)
+├── docs/test-plans/             # per-story test plans (issue-N-test-plan.md)
+└── <your code here>             # ADAPT: add your backend/frontend/library code
 ```
 
 Board lifecycle is event-driven — the only manual move is the human Ready
