@@ -393,16 +393,17 @@ github.com → Projects → New project → add Status field manually). Do not S
 whole init — the rest of the setup can proceed without the board, though board
 automation won't fire until it's configured.
 
-5. **Switch board view to Board layout (manual step — gh CLI doesn't support this yet).**
+5. **Configure Board view with Status columns (manual step).**
    Print clear instructions for the user:
 
-   > **Manual step required:**
-   > Go to your GitHub Project board → Click the **View** dropdown (top toolbar) 
-   > → Select **Board** (instead of Table)
-   > 
-   > The project starts in Table view. Switch it to **Board** view so the Status
-   > field displays as columns (Backlog | Ready | In progress | In review | Done).
-   > This view is required for the board automation to work properly.
+   > **Manual step required — configure the board view:**
+   > 1. Go to your GitHub Project board
+   > 2. Click the **View** dropdown (top toolbar) → Select **Board** (instead of Table)
+   > 3. Once in Board view, click **Group by** (top toolbar) → Select **Status**
+   > 4. Verify the columns appear: Backlog | Ready | In progress | In review | Done
+   >
+   > The board must be in Board view grouped by Status for the automation to work.
+   > Without this configuration, the workflow automation won't move cards between columns.
 
 6. **Disable built-in project workflows that race our custom automation.**
    The GitHub Projects API does not support toggling built-in workflows, so print
