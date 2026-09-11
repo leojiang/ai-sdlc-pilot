@@ -204,7 +204,7 @@ This section walks through a complete development cycle, from drafting a story t
    gh pr create --fill
    ```
    Or in the browser: click "Compare & pull request" on GitHub.
-   
+
    **Important:** The PR body must reference the story issue:
    ```
    Closes #<issue-number>
@@ -271,7 +271,7 @@ This section walks through a complete development cycle, from drafting a story t
   - Follow-up work gets its own issue and PR
   - Link the new story to the original with a comment if needed
 
-- **If enhancement requested:** Same process — new story, new PR 
+- **If enhancement requested:** Same process — new story, new PR
 
 ### Useful Commands Reference
 
