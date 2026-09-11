@@ -6,26 +6,51 @@ You are setting up a brand-new project with the AI-augmented SDLC framework. Thi
 a multi-phase guided setup — confirm with the user before each phase that changes
 external state. Never skip a phase or proceed after a failure.
 
-## Phase 1 — Collect information
+## Phase 1 — Collect information (questionnaire)
 
-1. **Project name**: use $ARGUMENTS if provided, otherwise ask the user.
-2. Ask the user for the following (show sensible defaults in brackets):
-   - **One-paragraph description** — what the product does and for whom
-   - **GitHub owner** — org name or personal username
-     (default: infer from `gh api user -q .login`)
-   - **Team lead GitHub username** for CODEOWNERS (default: same as owner)
-   - **Repo visibility** — public (recommended) or private.
-     If the user picks **private**, warn clearly:
-     > GitHub Free cannot enforce branch protection rules (required reviews,
-     > required status checks, CODEOWNERS) on private repos — you need GitHub Pro
-     > ($4/mo) or Team ($4/user/mo). The workflow's other layers (CI checks,
-     > `/start-coding` gate, board automation) still work, but the hard merge
-     > backstop won't be active. GitHub Free also limits Actions to 2,000 min/month
-     > on private repos — a self-hosted runner is strongly recommended.
-   - **Backend stack** — Spring Boot (Java) / Node.js (Express) / Python (FastAPI) / Go / None / Other
-   - **Frontend stack** — Flutter / React (TypeScript) / Vue / Angular / None / Other
-3. Show a summary table of all collected values and ask for confirmation before
-   continuing. If the user changes anything, update and re-confirm.
+Present a form with all fields upfront. User provides all answers at once in one batch,
+then proceed non-blocking (no more prompts). Collect:
+
+1. **Project name** — use $ARGUMENTS if provided, else prompt once
+2. **Description** — show example, allow blank for default
+3. **GitHub owner** — default: infer from `gh api user -q .login`
+4. **Team lead** — default: same as owner
+5. **Repo visibility** — public (default) or private (warn about limitations)
+6. **Backend stack** — spring-boot / nodejs / python / go / none / other (default: nodejs)
+7. **Frontend stack** — flutter / react / vue / angular / none / other (default: react)
+
+Example flow:
+```
+=== AI-Augmented SDLC Project Setup ===
+
+Project name: sdlc-verification
+Description [AI-augmented software development...]: 
+GitHub owner [leojiang]: 
+Team lead [leojiang]: 
+Visibility - public or private? [public]: public
+Backend stack - spring-boot/nodejs/python/go/none/other [nodejs]: nodejs
+Frontend stack - flutter/react/vue/angular/none/other [react]: react
+
+=== Configuration Summary ===
+Project: sdlc-verification
+Description: AI-augmented software development...
+Owner: leojiang
+Team lead: leojiang
+Visibility: public
+Backend: nodejs
+Frontend: react
+
+Proceeding with setup...
+```
+
+Once all inputs collected and confirmed, proceed with Phases 2-11 without interruption.
+
+**Why defaults?**
+- 90% of users will choose Node.js + React anyway
+- Public repos are required for the framework to work properly
+- The owner is already authenticated (gh would fail if not)
+- Generic description is fine; users customize later in their README
+- This keeps the command fast and non-interactive
 
 ## Phase 2 — Prerequisites check
 
