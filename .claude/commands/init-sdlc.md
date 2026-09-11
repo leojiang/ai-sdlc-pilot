@@ -107,71 +107,188 @@ Also in `.github/workflows/ci.yml`, the `story-gate` job has `PROJECT_TITLE: SDL
 
 ### 4c. Stack-adaptive files (generate based on chosen stack)
 
-For each file below, generate content adapted to the user's chosen backend and frontend
-stack. Use the existing file as a structural reference but replace stack-specific parts.
-If the user chose "Other" for either stack, use `# ADAPT` comment markers with clear
-instructions for what to fill in.
+**Before generating**, confirm the tech stack choices with the user:
 
-**`CLAUDE.md`** — Rewrite with:
-- Project name and description from Phase 1
-- The **Workflow** section stays identical (it is stack-agnostic)
-- The **Board lifecycle** section stays identical
-- The **Definition of Done** section stays identical
-- The **Story template** section stays identical
-- The **Code style** section: generate rules appropriate for the chosen stack
-  (e.g., Java: Google Java Format; Node.js: ESLint + Prettier strict TypeScript;
-  Python: ruff; Flutter: flutter analyze; Go: gofmt + go vet)
-- The **Commands** section: `make bootstrap`, `make lint`, `make test` (same names,
-  stack-specific descriptions of what they run)
-- The **Architecture map** section: a starter tree showing the chosen stack's
-  conventional layout (e.g., `src/main/java/...` for Spring Boot, `src/` for Node,
-  `lib/` for Flutter). Include `# ADAPT as the codebase grows` note.
+Show them what was selected in Phase 1:
+```
+Backend stack: <backend choice>
+Frontend stack: <frontend choice>
 
-**`Makefile`** — Generate with the 4 standard targets adapted to the stack:
+Is this correct? (yes/no)
+```
 
-| Target | Spring Boot | Node.js | Python (FastAPI) | Flutter | Go |
-|---|---|---|---|---|---|
-| bootstrap | `./mvnw dependency:go-offline compile` | `npm install` | `pip install -e ".[dev]"` | `flutter pub get` | `go mod download` |
-| lint | `./mvnw -DskipTests compile` | `npm run lint` | `ruff check . && ruff format --check .` | `flutter analyze` | `go vet ./...` |
-| test | `./mvnw test` | `npm test` | `pytest` | `flutter test` | `go test ./...` |
-| test-coverage | `./mvnw verify jacoco:report` | `npm test -- --coverage` | `pytest --cov` | `flutter test --coverage` | `go test -coverprofile=coverage.out ./...` |
+If they say "no", go back and ask them to re-confirm their choices from Phase 1.
 
-If both backend and frontend are chosen, each target runs both (backend first, then
-frontend), following the existing Makefile pattern with `if [ -d backend ]; then ...`.
+If they say "yes", proceed to generate the following files using Claude:
 
-Always include the framework-level lint checks that already exist in the Makefile:
-`check-gate-query`, `check-ai-review`, `check-ai-review-tools`, `check-review-settings`.
+For each file below, invoke Claude with a detailed prompt to generate content adapted 
+to the user's chosen backend and frontend stack. Use the existing file as a structural 
+reference but replace stack-specific parts. If the user chose "Other" for either stack, 
+use `# ADAPT` comment markers with clear instructions for what to fill in.
 
-**`.editorconfig`** — Keep the generic root block (charset, EOL, whitespace). Add
-language-specific sections for the chosen stacks (e.g., `[*.java]` indent_size 4,
-`[*.py]` indent_size 4, `[*.dart]` indent_size 2, `[*.go]` indent_style tab).
-Always include `[Makefile]` with tab indent.
+Then show the user the generated file and ask: **"Does this look right?"** 
+- If yes: write it to disk
+- If no: ask what's wrong and regenerate
 
-**`.gitignore`** — Generate for the chosen stacks. Always include: `.env*`, `.DS_Store`,
-`*.log`, `.idea/`, `.vscode/`, `*.iml`. Add stack-specific patterns
-(e.g., `target/` for Java, `node_modules/` for Node, `__pycache__/` for Python,
-`build/` for Flutter, vendor for Go).
+**`Makefile`** — Invoke Claude with this prompt:
 
-**`.github/workflows/ci.yml`** — Adapt the `lint` and `test` jobs' setup steps and
-env vars for the chosen stack. Keep the `traceability`, `story-gate`, `conventions`,
-and `triage` jobs exactly as they are (they are stack-agnostic). Specific adaptations:
-- Spring Boot: `actions/setup-java@v4` with temurin 17
-- Node.js: `actions/setup-node@v4` with node 20
-- Python: `actions/setup-python@v5` with python 3.12
-- Flutter: `subosito/flutter-action@v2` + `actions/setup-java@v4`
-- Go: `actions/setup-go@v5`
-- Coverage artifact paths: adapt to the stack's coverage output location
-- Remove the `PUB_HOSTED_URL` env and `check-pub-host` steps unless Flutter is chosen
-- Remove the `Pub-host guard smoke` step unless Flutter is chosen
+```
+Generate a Makefile for a <backend> backend + <frontend> frontend project.
+Include these targets:
+- bootstrap: install dependencies (pre-commit hook setup + language-specific)
+- lint: run code style checks
+- test: run test suite
+- test-coverage: run tests with coverage report
 
-**`README.md`** — Generate a new README with:
-- Project name and description
-- A "Development" section with prerequisites for the chosen stack
-- First-time setup (`make bootstrap`)
-- Everyday commands (`make lint`, `make test`)
-- A brief "AI-augmented SDLC" section explaining the workflow and linking to
-  CLAUDE.md for details
-- A note about required secrets (PROJECT_TOKEN, ANTHROPIC_AUTH_TOKEN)
+Also include these framework-level drift checks (DO NOT modify, copy exactly):
+[INSERT the check-gate-query, check-ai-review, check-ai-review-tools, check-review-settings 
+targets from the current Makefile]
+
+For <backend> + <frontend>, use these commands:
+
+Backend (<backend>):
+  - bootstrap: [command]
+  - lint: [command]
+  - test: [command]
+  - test-coverage: [command]
+
+Frontend (<frontend>):
+  - bootstrap: [command]
+  - lint: [command]
+  - test: [command]
+  - test-coverage: [command]
+
+If both are present, each target should run backend first, then frontend (use shell if logic).
+If one is "None", skip that section.
+If one is "Other", add # ADAPT comments with placeholders.
+
+Output the complete Makefile.
+```
+
+Reference table for common stacks:
+
+| Stack | bootstrap | lint | test | test-coverage |
+|---|---|---|---|---|
+| Spring Boot | `./mvnw dependency:go-offline compile` | `./mvnw -DskipTests compile` | `./mvnw test` | `./mvnw verify jacoco:report` |
+| Node.js | `npm install` | `npm run lint` | `npm test` | `npm test -- --coverage` |
+| Python (FastAPI) | `pip install -e ".[dev]"` | `ruff check . && ruff format --check .` | `pytest` | `pytest --cov` |
+| Flutter | `flutter pub get` | `flutter analyze` | `flutter test` | `flutter test --coverage` |
+| Go | `go mod download` | `go vet ./...` | `go test ./...` | `go test -coverprofile=coverage.out ./...` |
+
+**`CLAUDE.md`** — Invoke Claude:
+
+```
+Rewrite CLAUDE.md for the <project name> project using <backend> backend + <frontend> frontend.
+
+Keep these sections EXACTLY as they are (do not modify):
+- Team conventions / Workflow
+- Board lifecycle
+- Definition of Done
+- Story template
+
+Customize:
+- Project title: <project name>
+- Project description: <description from Phase 1>
+- Code style section: generate rules for the chosen stack
+  (e.g., Java: Google Java Format, Node.js: ESLint + Prettier, Python: ruff, Flutter: flutter analyze)
+- Commands section: document `make bootstrap`, `make lint`, `make test`, describing what they do for this stack
+- Architecture map: show a starter directory tree for the chosen stack
+  (e.g., src/main/java/... for Spring Boot, src/ for Node, lib/ for Flutter)
+
+Output the complete CLAUDE.md file.
+```
+
+**`.editorconfig`** — Invoke Claude:
+
+```
+Generate a .editorconfig file for <backend> + <frontend> project.
+
+Keep the generic root block: charset=utf-8, end_of_line=lf, insert_final_newline=true
+
+Add language-specific sections:
+- [*.java]: indent_size=4 (for Spring Boot)
+- [*.js,*.ts,*.jsx,*.tsx]: indent_size=2 (for Node.js)
+- [*.py]: indent_size=4 (for Python)
+- [*.dart]: indent_size=2 (for Flutter)
+- [*.go]: indent_style=tab (for Go)
+- [Makefile]: indent_style=tab (always required)
+
+Only include sections for the chosen stacks.
+
+Output the complete .editorconfig file.
+```
+
+**`.gitignore`** — Invoke Claude:
+
+```
+Generate a .gitignore file for <backend> + <frontend> project.
+
+Always include: .env*, .DS_Store, *.log, .idea/, .vscode/, *.iml
+
+Add stack-specific patterns:
+- Spring Boot: target/, *.class, .mvn/, mvnw.cmd
+- Node.js: node_modules/, dist/, build/, coverage/
+- Python: __pycache__/, *.pyc, .venv/, venv/, dist/, build/
+- Flutter: build/, .dart_tool/, .flutter-plugins
+- Go: go.mod.tidy result, vendor/ (if used)
+
+Only include patterns for the chosen stacks.
+
+Output the complete .gitignore file.
+```
+
+**`.github/workflows/ci.yml`** — Invoke Claude:
+
+```
+Adapt the ci.yml workflow for <backend> + <frontend> project.
+
+Keep these jobs EXACTLY as they are:
+- traceability
+- story-gate
+- conventions
+- triage
+
+Customize the `lint` and `test` jobs:
+- Add stack-specific setup actions:
+  - Spring Boot: actions/setup-java@v4 with temurin 17
+  - Node.js: actions/setup-node@v4 with node 20
+  - Python: actions/setup-python@v5 with python 3.12
+  - Flutter: subosito/flutter-action@v2 + actions/setup-java@v4
+  - Go: actions/setup-go@v5
+
+- Update the run commands to use `make lint`, `make test`, `make bootstrap`
+- Adapt the coverage artifact path (if applicable):
+  - Spring Boot: target/site/jacoco/
+  - Node.js: coverage/
+  - Python: htmlcov/
+  - Flutter: coverage/
+  - Go: coverage.out (if using go test -coverprofile)
+
+Remove Flutter-specific env vars (PUB_HOSTED_URL, check-pub-host) unless Flutter is chosen.
+
+Output the complete ci.yml file with all jobs.
+```
+
+**`README.md`** — Invoke Claude:
+
+```
+Generate a new README.md for the <project name> project with <backend> + <frontend> stack.
+
+Include:
+- Project title: <project name>
+- Project description: <description from Phase 1>
+- Prerequisites section for the chosen stack (what tools/versions to install)
+- Getting started: git clone, make bootstrap, make lint, make test
+- Development workflow: brief summary linking to CLAUDE.md
+- Secrets section: mention PROJECT_TOKEN and ANTHROPIC_AUTH_TOKEN
+- Link to CLAUDE.md for detailed conventions and workflow
+
+Output the complete README.md file.
+```
+
+Then show each generated file to the user and ask: **"Does [filename] look correct?"**
+- If yes for all: write them all to disk
+- If no for any: ask what needs to change and regenerate that file
 
 ### 4d. Username substitution
 
