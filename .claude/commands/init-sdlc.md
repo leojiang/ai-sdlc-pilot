@@ -341,31 +341,76 @@ If this fails (e.g., insufficient permissions), print the contents of
 The user can customize the rules later by editing `.github/branch-protection.json`
 and re-applying with the same `gh api` command.
 
-## Phase 10 — Secrets guidance
+## Phase 10 — Secrets setup
 
-Secrets cannot be set silently. Guide the user through each one:
+Secrets are required for board automation and AI review. Walk through each one
+interactively — ask the user for the value, then set it. Do NOT skip ahead without
+asking. For each secret, explain what it is, then ask the user to provide the value
+(or say "skip" to defer).
 
-1. **PROJECT_TOKEN** — a GitHub PAT (classic) with the `project` scope. Required for
-   board automation. Walk the user through:
-   - Create at github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token
-   - Scope: `project` (and `repo` if the repo is private)
-   - Then: `gh secret set PROJECT_TOKEN` (paste the token when prompted)
+**Important:** You cannot read or echo secret values. Use `gh secret set <NAME>` which
+reads from stdin. When the user provides a value, pipe it directly:
+```
+echo "<value>" | gh secret set <NAME>
+```
 
-2. **ANTHROPIC_AUTH_TOKEN** — the API key or token for the AI model endpoint. Required
-   for AI review and failure triage:
-   `gh secret set ANTHROPIC_AUTH_TOKEN`
+### 10a. PROJECT_TOKEN (required for board automation)
 
-3. **ANTHROPIC_BASE_URL** (optional) — only if using a non-Anthropic-compatible endpoint:
-   `gh secret set ANTHROPIC_BASE_URL`
+Tell the user:
+> The board workflows need a GitHub Personal Access Token with the `project` scope to
+> move cards between statuses. Without it, the board won't update automatically.
+>
+> Create one at: **github.com → Settings → Developer settings → Personal access tokens
+> → Tokens (classic) → Generate new token**
+> - Name: something like "SDLC board automation"
+> - Scopes: check **`project`** (also **`repo`** if the repo is private)
+> - Copy the token — you won't see it again
 
-4. **Model overrides** (optional) — if using a custom model endpoint that remaps model
-   names (e.g., GLM), set:
-   `gh secret set ANTHROPIC_DEFAULT_SONNET_MODEL`
-   `gh secret set ANTHROPIC_DEFAULT_HAIKU_MODEL`
-   `gh secret set ANTHROPIC_DEFAULT_OPUS_MODEL`
+Then ask: "Paste your PROJECT_TOKEN (or type 'skip' to set it later):"
 
-Tell the user: "The board workflows and AI review will skip gracefully if these secrets
-are missing — they emit warnings but don't block. You can set them now or later."
+- If the user provides a value: `echo "<value>" | gh secret set PROJECT_TOKEN`
+  Then verify: `gh secret list` should show `PROJECT_TOKEN`.
+- If the user says "skip": note that board automation won't work until this is set,
+  and continue.
+
+### 10b. ANTHROPIC_AUTH_TOKEN (required for AI review + triage)
+
+Tell the user:
+> The AI review and failure triage CI jobs need an API key for the AI model endpoint.
+> This is your Anthropic API key, or the token for a compatible endpoint (e.g., GLM).
+
+Then ask: "Paste your ANTHROPIC_AUTH_TOKEN (or type 'skip' to set it later):"
+
+- If the user provides a value: `echo "<value>" | gh secret set ANTHROPIC_AUTH_TOKEN`
+- If the user says "skip": note that AI review won't run until this is set.
+
+### 10c. ANTHROPIC_BASE_URL (optional — non-Anthropic endpoints only)
+
+Ask: "Are you using a non-Anthropic-compatible endpoint (e.g., GLM)? If yes, paste the
+base URL. If using Anthropic directly, type 'skip':"
+
+- If the user provides a URL: `echo "<value>" | gh secret set ANTHROPIC_BASE_URL`
+- If skip: continue.
+
+### 10d. Model overrides (optional — custom endpoints only)
+
+Only ask this if the user set ANTHROPIC_BASE_URL in 10c. Otherwise skip entirely.
+
+Ask: "Does your endpoint remap model names? If yes, provide the model IDs for each
+(or 'skip' for any you don't need):"
+
+For each one the user provides:
+- `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_SONNET_MODEL`
+- `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_HAIKU_MODEL`
+- `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_OPUS_MODEL`
+
+### 10e. Summary
+
+After all secrets are handled, run `gh secret list` and show the user which secrets
+are configured. For any that were skipped, remind them:
+> To set a secret later: `gh secret set <NAME>` (paste the value when prompted).
+> Board workflows and AI review skip gracefully when secrets are missing — they
+> emit warnings but don't block CI.
 
 ## Phase 11 — Verification and next steps
 
