@@ -92,6 +92,7 @@ them exactly as they exist in this repo:
 - `scripts/heal-filter.jq`
 - `scripts/heal-filter.fixture.json`
 - `.pre-commit-config.yaml` (the gitleaks base)
+- `.github/branch-protection.json` (rules applied in Phase 8)
 
 ### 4b. Project-title substitution (4 board workflow files)
 
@@ -253,6 +254,30 @@ github.com → Projects → New project → add Status field manually). Do not S
 whole init — the rest of the setup can proceed without the board, though board
 automation won't fire until it's configured.
 
+5. **Disable built-in project workflows that race our custom automation.**
+   The GitHub Projects API does not support toggling built-in workflows, so print
+   clear manual instructions for the user:
+
+   > **Important — manual step required:**
+   > Go to your project board → ⋯ menu → **Settings** → **Workflows** and:
+   > - **Disable** "Pull request linked to issue" — our `story-review.yml` handles this with a Ready gate
+   > - **Disable** "Pull request merged" — our `story-done.yml` handles this deterministically with a heal sweep
+   > - **Keep enabled**: "Item added to project", "Item closed", "Auto-close issue"
+   >
+   > If the built-in workflows stay on, they race our custom workflows and can
+   > move cards to the wrong status. This is the one manual step that can't be
+   > automated.
+
+   Also query the project's current workflow state to confirm what needs changing:
+   ```
+   gh api graphql -f query='query($login: String!, $n: Int!) {
+     user(login: $login) { projectV2(number: $n) {
+       workflows(first: 20) { nodes { name enabled } }
+     } }
+   }' -f login=<owner> -F n=<project-number>
+   ```
+   Show the user the current state so they can see exactly which toggles to flip.
+
 ## Phase 7 — Create labels
 
 Create the 4 required labels (skip with a note if they already exist — `gh label create`
@@ -267,35 +292,35 @@ gh label create flaky          --description "Quarantined flaky test"         --
 
 ## Phase 8 — Branch protection (public repos only)
 
-If the repo is **private**, skip this phase and print:
-> Branch protection requires GitHub Pro/Team for private repos. Here's what to
-> configure manually after upgrading: [list the rules below].
+Branch protection rules are stored in `.github/branch-protection.json` — the single
+source of truth. This file mirrors the pilot repo's proven settings: required status
+checks (lint, test, story-gate), enforce admins, dismiss stale reviews, required linear
+history, required conversation resolution, no force pushes, no deletions.
 
-If the repo is **public**, confirm with the user, then set branch protection via the API:
+If the repo is **private**, skip this phase and print:
+> Branch protection requires GitHub Pro/Team for private repos. The rules are saved
+> in `.github/branch-protection.json` — apply them manually after upgrading, or switch
+> to a public repo. The workflow's other enforcement layers (CI checks, `/start-coding`
+> gate, board automation) still work without branch protection.
+
+If the repo is **public**, confirm with the user, then apply the protection rules:
 
 ```
 gh api repos/<owner>/<repo-name>/branches/main/protection -X PUT \
   -H "Accept: application/vnd.github+json" \
-  --input - <<'EOF'
-{
-  "required_status_checks": {
-    "strict": true,
-    "contexts": ["lint", "test", "traceability"]
-  },
-  "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "dismiss_stale_reviews": true,
-    "require_code_owner_reviews": true,
-    "required_approving_review_count": 1
-  },
-  "restrictions": null,
-  "required_conversation_resolution": true
-}
-EOF
+  --input .github/branch-protection.json
 ```
 
-If this fails (e.g., insufficient permissions), print the rules as a manual checklist
-and continue.
+After applying, verify:
+```
+gh api repos/<owner>/<repo-name>/branches/main/protection
+```
+
+If this fails (e.g., insufficient permissions), print the contents of
+`.github/branch-protection.json` as a manual checklist and continue.
+
+The user can customize the rules later by editing `.github/branch-protection.json`
+and re-applying with the same `gh api` command.
 
 ## Phase 9 — Secrets guidance
 
