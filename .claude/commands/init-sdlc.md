@@ -540,23 +540,37 @@ Then ask: "Paste your ANTHROPIC_AUTH_TOKEN (or type 'skip' to set it later):"
 
 ### 10c. ANTHROPIC_BASE_URL (optional — non-Anthropic endpoints only)
 
-Ask: "Are you using a non-Anthropic-compatible endpoint (e.g., GLM)? If yes, paste the
-base URL. If using Anthropic directly, type 'skip':"
+Always ask this:
+
+Tell the user:
+> If you're using Anthropic's API directly, skip this. If using a compatible endpoint
+> (e.g., GLM, or a local proxy), provide the base URL.
+
+Ask: "Paste your ANTHROPIC_BASE_URL (or type 'skip' if using Anthropic directly):"
 
 - If the user provides a URL: `echo "<value>" | gh secret set ANTHROPIC_BASE_URL`
-- If skip: continue.
+  Then verify with `gh secret list`. Proceed to Phase 10d.
+- If skip: continue to Phase 11 (skip Phase 10d).
 
 ### 10d. Model overrides (optional — custom endpoints only)
 
-Only ask this if the user set ANTHROPIC_BASE_URL in 10c. Otherwise skip entirely.
+Only ask this if the user set ANTHROPIC_BASE_URL in Phase 10c (didn't skip it).
 
-Ask: "Does your endpoint remap model names? If yes, provide the model IDs for each
-(or 'skip' for any you don't need):"
+Tell the user:
+> Some endpoints use different model names. If your endpoint remaps model IDs,
+> provide them here. Otherwise, the defaults from Anthropic will be used.
 
-For each one the user provides:
+Ask for each model (user can skip any):
+- "Model ID for Claude Sonnet (or 'skip'):"
+- "Model ID for Claude Haiku (or 'skip'):"
+- "Model ID for Claude Opus (or 'skip'):"
+
+For each one provided:
 - `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_SONNET_MODEL`
 - `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_HAIKU_MODEL`
 - `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_OPUS_MODEL`
+
+If all are skipped or user skipped ANTHROPIC_BASE_URL, proceed to Phase 11.
 
 ### 10e. Summary
 
