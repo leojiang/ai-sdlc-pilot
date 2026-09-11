@@ -8,11 +8,11 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
-[*.java]
-indent_size = 4
-
-[*.dart]
-indent_size = 2
-
 [Makefile]
 indent_style = tab
+
+# ADAPT: add language-specific sections, e.g.:
+# [*.java]
+# indent_size = 4
+# [*.py]
+# indent_size = 4

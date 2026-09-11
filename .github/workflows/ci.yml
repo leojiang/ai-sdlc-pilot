@@ -19,70 +19,24 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    env:
-      # The team's canonical pub host is the flutter-io.cn mirror — developer
-      # machines resolve against it and the committed frontend/pubspec.lock
-      # records its URLs. CI must use the same host, or `flutter pub get`
-      # rewrites every lockfile entry and the repo-hygiene check fails.
-      # (Flip this + re-resolve the lock against pub.dev if the team standard
-      # ever changes.)
-      PUB_HOSTED_URL: https://pub.flutter-io.cn
+    # ADAPT: add setup steps for your stack (e.g. actions/setup-node, actions/setup-java)
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: '17' }
-      # Flutter is pinned (not the runner image's unpinned copy) so builds are
-      # deterministic — story #1 edge case 4.
-      - uses: subosito/flutter-action@v2
-        with: { flutter-version: 3.41.9, channel: stable }
       - run: make lint
 
   test:
     runs-on: ubuntu-latest
-    env:
-      # The team's canonical pub host is the flutter-io.cn mirror — developer
-      # machines resolve against it and the committed frontend/pubspec.lock
-      # records its URLs. CI must use the same host, or `flutter pub get`
-      # rewrites every lockfile entry and the repo-hygiene check fails.
-      # (Flip this + re-resolve the lock against pub.dev if the team standard
-      # ever changes.)
-      PUB_HOSTED_URL: https://pub.flutter-io.cn
+    # ADAPT: add setup steps for your stack
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: '17' }
-      - uses: subosito/flutter-action@v2
-        with: { flutter-version: 3.41.9, channel: stable }
       - run: make bootstrap
-      # Runs the full backend verify lifecycle once (plus JaCoCo) and the
-      # flutter suite with coverage — no separate test/verify duplication.
       - run: make test-coverage
-      - name: Pub-host guard smoke — must fail fast with PUB_HOSTED_URL unset
-        run: |
-          if env -u PUB_HOSTED_URL make check-pub-host; then
-            echo "::error::check-pub-host did not fail with PUB_HOSTED_URL unset"; exit 1
-          fi
-          echo "guard fired as expected"
-      - name: Repo hygiene — no build artifacts committed or created
-        run: |
-          set -euo pipefail
-          # AC1: nothing under artifact/IDE dirs may be committed.
-          BAD=$(git ls-files | grep -E '(^|/)(target|build|\.gradle|\.dart_tool|\.kotlin|\.idea|\.vscode)/|\.(iml)$' || true)
-          if [ -n "$BAD" ]; then
-            echo "::error::Committed build artifacts found:"; echo "$BAD"; exit 1
-          fi
-          # N6: a full build must leave the working tree clean (.gitignore completeness).
-          DIRTY=$(git status --porcelain)
-          if [ -n "$DIRTY" ]; then
-            echo "::error::Working tree dirty after build — .gitignore is incomplete:"; echo "$DIRTY"; exit 1
-          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage
-          path: |
-            backend/target/site/jacoco/
-            frontend/coverage/
+          # ADAPT: set path to your stack's coverage output
+          path: coverage/
           if-no-files-found: ignore
 
   traceability:
@@ -163,9 +117,6 @@ jobs:
               Backlog)
                 echo "::error::story #$NUM is at Backlog — review it and promote it to Ready before merging"; BAD=1 ;;
               Done)
-                # Reachable when a Done story is reopened or dragged — closed
-                # stories are filtered out above (state==OPEN), so ordinary
-                # follow-up PRs close nothing and pass as "not applicable"
                 echo "::error::story #$NUM is at Done — its lifecycle is terminal; open a follow-up issue for further work"; BAD=1 ;;
               *)
                 echo "::error::story #$NUM is not on the '$PROJECT_TITLE' board — add it and promote it to Ready before merging"; BAD=1 ;;
@@ -198,13 +149,8 @@ jobs:
           reject "context: see #9"
           reject "This PR discloses issues close to #12"
           reject "no reference at all"
-          # URL-form and owner/repo#N refs: GitHub's parser resolves both (the
-          # board moves), but traceability intentionally requires the bare "#N"
-          # form — the divergence is pinned here so it stays a documented choice
           reject "Closes https://github.com/foo/bar/issues/9"
           reject "Closes owner/repo#16"
-          # 'closes:#16' (no space): resolver-verified REJECTED by GitHub
-          # (PR #27 experiment) — aligned reject, not an unverified assumption
           reject "closes:#16"
           echo "✅ closing-keyword fixtures all pass"
       - name: Heal-filter fixtures (story-done board sweep)

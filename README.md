@@ -1,9 +1,11 @@
-# ai-sdlc-pilot
+# AI-Augmented SDLC Template
 
-Pilot repo and **reusable template** for the AI-augmented SDLC workflow: GitHub Issues
-(stories) + GitHub Projects (board) + GitHub Actions (CI/CD) + Claude Code (AI agent).
+A reusable framework for AI-augmented software development: GitHub Issues (stories) +
+GitHub Projects (board) + GitHub Actions (CI/CD) + Claude Code (AI agent).
 
-**Core principle:** AI drafts everything, humans decide everything.
+**Core principle:** AI drafts everything, humans decide everything. Every artifact
+(stories, test plans, code, reviews) starts as an AI draft; every gate (approval,
+merge) is a human decision.
 
 ## Start your own project
 
@@ -18,134 +20,77 @@ claude
 ```
 
 The `/init-sdlc` command guides you through everything:
-- Prerequisite checks (gh, git, stack-specific tools)
-- GitHub repo creation (or use an existing one)
-- Framework file customization for your tech stack
-- GitHub Project board creation with the Status field (Backlog → Ready → In progress → In review → Done)
-- Labels, branch protection, and secrets setup
-- Initial commit
+
+1. **Prerequisites** — verifies gh, git, and your stack-specific tools
+2. **GitHub repo** — creates a new repo or uses an existing one
+3. **Framework files** — customizes CLAUDE.md, Makefile, CI, .gitignore for your tech stack
+4. **Project board** — creates a GitHub Project with the Status field (Backlog → Ready → In progress → In review → Done)
+5. **Labels** — creates `story`, `ai-draft`, `needs-expansion`, `flaky`
+6. **Branch protection** — applies rules from `.github/branch-protection.json`
+7. **Secrets** — walks you through setting PROJECT_TOKEN and ANTHROPIC_AUTH_TOKEN
 
 **Note:** Public repos are recommended — GitHub Free cannot enforce branch protection
-rules (required reviews, required status checks) on private repos. See the setup
-command for details.
+rules (required reviews, required status checks) on private repos.
 
-## Try the pilot workflow
+## How the workflow works
 
-```bash
-claude
-> /story-draft "<one-paragraph feature brief>"
+```
+Story flow:   idea → /story-draft → Issue [ai-draft] → HUMAN review → Ready
+Dev flow:     /start-coding <n> → branch → implement → PR → AI review → HUMAN merge
+Board flow:   Backlog → Ready (human) → In progress → In review → Done (all automated)
 ```
 
-AI drafts the story → you review and confirm → it's created with `story` + `ai-draft` labels →
-a human reviews it in the browser and promotes it to Ready on the board.
+| Who | What |
+|---|---|
+| AI (Claude Code) | Drafts stories, test plans, code, reviews (advisory) |
+| Human | Reviews drafts, promotes to Ready, resolves review threads, clicks merge |
+| Automation | Moves board cards on git events (push, PR, merge) |
 
-## Files that matter
+## What's in the template
 
-- `CLAUDE.md` — conventions + the story template (read by humans and the AI)
-- `.claude/commands/init-sdlc.md` — the framework setup command
-- `.claude/commands/story-draft.md` — the story-drafting workflow
-- `.claude/commands/story-refine.md` — Definition-of-Ready check
-- `.claude/commands/start-coding.md` — the implementation entry point (gate-checks, branch, implement, AI review)
-
-## Development
-
-Monorepo with two apps scaffolded side by side:
-
-- `backend/` — Spring Boot 3.5 (Java 17, Maven via wrapper — no local Maven install needed)
-- `frontend/` — Flutter (Dart SDK ≥ 3.9), platforms: Android, iOS, web, macOS
-
-### Prerequisites
-
-| Tool | Version | Notes |
-|---|---|---|
-| JDK | 17 or newer | The only backend requirement — the Maven wrapper downloads Maven itself. Older JDKs fail the build with an explicit enforcer message. |
-| Flutter SDK | stable (≥ 3.41) | **Run `flutter doctor` first** and fix anything red before continuing. Dart constraint is enforced by `frontend/pubspec.yaml`. |
-| `PUB_HOSTED_URL` | `https://pub.flutter-io.cn` | **Required.** The team's pub host; `frontend/pubspec.lock` is resolved against it. Without it, `pub get` rewrites every lockfile entry. Set it in your shell profile. |
-| git, GNU make | any recent | |
-
-### First-time setup
-
-```bash
-git clone <this-repo>
-cd ai-sdlc-pilot
-export PUB_HOSTED_URL=https://pub.flutter-io.cn   # add to your shell profile
-make bootstrap   # backend deps (via wrapper) + frontend packages + git hooks
+```
+CLAUDE.md                       # conventions — read by humans AND the AI
+.claude/commands/               # /init-sdlc, /story-draft, /story-refine,
+                                # /story-status, /test-plan, /gen-tests, /start-coding
+.claude/prompts/pr-review.md    # AI reviewer instructions (advisory output)
+.claude/settings.json           # dev-session permissions
+.claude/settings.review.json    # read-only review-session permissions
+.github/workflows/              # CI gates + board automation
+.github/actions/project-lookup/ # shared board project/field/option lookup
+.github/branch-protection.json  # branch protection rules (applied by /init-sdlc)
+scripts/                        # ai-review.sh + fixtures
+docs/test-plans/                # per-story test plans (created during development)
+Makefile                        # bootstrap / lint / test + framework drift checks
 ```
 
-`make bootstrap`, `lint`, `test`, and `test-coverage` all fail fast with
-instructions if `PUB_HOSTED_URL` doesn't match the host the lockfile is
-resolved against.
+## After setup
 
-### CI secrets (board + AI gates)
+Draft your first story:
+```
+/story-draft "<one-paragraph feature brief>"
+```
 
-The board workflows and CI gates need two secrets; without them they **run
-open** — they emit a visible `::warning::` on the Checks tab and skip, but do
-not block. Configure them before relying on the gates:
+Review the draft → confirm → issue created → promote to Ready on the board → then:
+```
+/start-coding <issue-number>
+```
+
+## CI secrets
 
 | Secret | Used by | Effect when missing |
 |---|---|---|
-| `PROJECT_TOKEN` | board-add / story-status / story-review / story-done / story-gate | Board never moves; the merge-layer Ready gate stays open |
-| `ANTHROPIC_AUTH_TOKEN` (+ `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_*_MODEL`) | ai-review / triage | No AI review comments; no failure triage |
+| `PROJECT_TOKEN` | board-add / story-status / story-review / story-done / story-gate | Board never moves; Ready gate stays open |
+| `ANTHROPIC_AUTH_TOKEN` (+ `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_*_MODEL`) | ai-review / triage | No AI review; no failure triage |
 
-### Running the backend
+Both skip gracefully with warnings when missing — CI doesn't block, but the gates
+aren't enforced.
 
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-
-Verify it's up:
+## Everyday commands
 
 ```bash
-curl http://localhost:8080/actuator/health
-# {"status":"UP"}
-```
-
-**Port 8080 already in use?** Override it (also useful to run two instances):
-
-```bash
-SERVER_PORT=8081 ./mvnw spring-boot:run
-curl http://localhost:8081/actuator/health
-```
-
-### Running the frontend
-
-The placeholder screen calls the backend health endpoint and shows the result —
-this proves both sides are wired together.
-
-```bash
-cd frontend
-flutter run    # pick a device; needs the backend running first
-```
-
-On the **Android emulator**, `localhost` is not your machine — point the app at the host:
-
-```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
-```
-
-(On iOS simulator, macOS, and Chrome, the default `http://localhost:8080` works.)
-
-### Everyday commands
-
-```bash
-make lint            # backend compile + flutter analyze
-make test            # backend tests + flutter tests
-make test-coverage   # both, with coverage (backend JaCoCo / frontend lcov)
+make lint          # framework checks + your stack's linter
+make test          # your stack's test suite
+make test-coverage # tests with coverage report
 ```
 
 Run these before pushing — CI runs the same.
-
-### Troubleshooting
-
-- **"requires Java 17 or newer"** during backend build — that's the enforcer
-  doing its job. Install JDK 17+ (`sdk install java 17-...`, `brew install --cask temurin@17`, …).
-- **Backend fails to start with "Port 8080 was already in use"** — see the
-  `SERVER_PORT` override above.
-- **Flutter/Dart version errors** — check `flutter doctor`, upgrade Flutter
-  (`flutter upgrade`), and confirm your Dart satisfies `environment.sdk` in
-  `frontend/pubspec.yaml`.
-- **First backend build is slow** — the wrapper downloads Maven and all
-  dependencies on first run; versions are pinned, so subsequent builds are
-  deterministic and offline-capable (via the local cache).
-

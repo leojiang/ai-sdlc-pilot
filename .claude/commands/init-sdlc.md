@@ -92,6 +92,7 @@ them exactly as they exist in this repo:
 - `scripts/heal-filter.jq`
 - `scripts/heal-filter.fixture.json`
 - `.pre-commit-config.yaml` (the gitleaks base)
+- `.github/branch-protection.json` (rules applied in Phase 8)
 
 ### 4b. Project-title substitution (4 board workflow files)
 
@@ -253,6 +254,30 @@ github.com → Projects → New project → add Status field manually). Do not S
 whole init — the rest of the setup can proceed without the board, though board
 automation won't fire until it's configured.
 
+5. **Disable built-in project workflows that race our custom automation.**
+   The GitHub Projects API does not support toggling built-in workflows, so print
+   clear manual instructions for the user:
+
+   > **Important — manual step required:**
+   > Go to your project board → ⋯ menu → **Settings** → **Workflows** and:
+   > - **Disable** "Pull request linked to issue" — our `story-review.yml` handles this with a Ready gate
+   > - **Disable** "Pull request merged" — our `story-done.yml` handles this deterministically with a heal sweep
+   > - **Keep enabled**: "Item added to project", "Item closed", "Auto-close issue"
+   >
+   > If the built-in workflows stay on, they race our custom workflows and can
+   > move cards to the wrong status. This is the one manual step that can't be
+   > automated.
+
+   Also query the project's current workflow state to confirm what needs changing:
+   ```
+   gh api graphql -f query='query($login: String!, $n: Int!) {
+     user(login: $login) { projectV2(number: $n) {
+       workflows(first: 20) { nodes { name enabled } }
+     } }
+   }' -f login=<owner> -F n=<project-number>
+   ```
+   Show the user the current state so they can see exactly which toggles to flip.
+
 ## Phase 7 — Create labels
 
 Create the 4 required labels (skip with a note if they already exist — `gh label create`
@@ -265,104 +290,158 @@ gh label create needs-expansion --description "Raw brief; CI will expand it"  --
 gh label create flaky          --description "Quarantined flaky test"         --color F9D0C4
 ```
 
-## Phase 8 — Branch protection (public repos only)
+## Phase 8 — Commit and push
 
-If the repo is **private**, skip this phase and print:
-> Branch protection requires GitHub Pro/Team for private repos. Here's what to
-> configure manually after upgrading: [list the rules below].
+Branch protection (Phase 9) requires the `main` branch to exist on the remote.
+Commit and push now so the branch is available for protection rules.
 
-If the repo is **public**, confirm with the user, then set branch protection via the API:
+1. Run `make lint` to verify the framework-level checks pass before committing.
+   If lint fails, fix the issue first — do not commit broken files.
 
-```
-gh api repos/<owner>/<repo-name>/branches/main/protection -X PUT \
-  -H "Accept: application/vnd.github+json" \
-  --input - <<'EOF'
-{
-  "required_status_checks": {
-    "strict": true,
-    "contexts": ["lint", "test", "traceability"]
-  },
-  "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "dismiss_stale_reviews": true,
-    "require_code_owner_reviews": true,
-    "required_approving_review_count": 1
-  },
-  "restrictions": null,
-  "required_conversation_resolution": true
-}
-EOF
-```
-
-If this fails (e.g., insufficient permissions), print the rules as a manual checklist
-and continue.
-
-## Phase 9 — Secrets guidance
-
-Secrets cannot be set silently. Guide the user through each one:
-
-1. **PROJECT_TOKEN** — a GitHub PAT (classic) with the `project` scope. Required for
-   board automation. Walk the user through:
-   - Create at github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token
-   - Scope: `project` (and `repo` if the repo is private)
-   - Then: `gh secret set PROJECT_TOKEN` (paste the token when prompted)
-
-2. **ANTHROPIC_AUTH_TOKEN** — the API key or token for the AI model endpoint. Required
-   for AI review and failure triage:
-   `gh secret set ANTHROPIC_AUTH_TOKEN`
-
-3. **ANTHROPIC_BASE_URL** (optional) — only if using a non-Anthropic-compatible endpoint:
-   `gh secret set ANTHROPIC_BASE_URL`
-
-4. **Model overrides** (optional) — if using a custom model endpoint that remaps model
-   names (e.g., GLM), set:
-   `gh secret set ANTHROPIC_DEFAULT_SONNET_MODEL`
-   `gh secret set ANTHROPIC_DEFAULT_HAIKU_MODEL`
-   `gh secret set ANTHROPIC_DEFAULT_OPUS_MODEL`
-
-Tell the user: "The board workflows and AI review will skip gracefully if these secrets
-are missing — they emit warnings but don't block. You can set them now or later."
-
-## Phase 10 — Initial commit and verification
-
-1. Stage and commit everything:
+2. Stage and commit:
    ```
    git add -A
    git commit -m "bootstrap: AI-augmented SDLC framework for <project name>"
    ```
-2. Push: `git push -u origin main`
-   (If this is a fresh repo, the push may need `--force` if gh repo create already
-   pushed an empty commit — confirm with the user before force-pushing.)
 
-3. Run verification checks:
-   - `make lint` — should pass (at least the framework-level checks)
-   - `gh project list --owner <owner>` — should show the board
-   - `gh label list` — should show all 4 labels
-   - If public: `gh api repos/<owner>/<repo>/branches/main/protection` — should return the rules
+3. Push: `git push -u origin main`
+   (If this is a fresh repo and `gh repo create` already pushed an empty commit,
+   the histories may diverge. In that case, confirm with the user before
+   force-pushing: `git push -u origin main --force`.)
 
-4. Print the **"What's next"** summary:
-   ```
-   ✅ Project "<project name>" is set up with the AI-augmented SDLC framework.
+## Phase 9 — Branch protection (public repos only)
 
-   Secrets to configure (if not done above):
-     gh secret set PROJECT_TOKEN        # PAT with project scope — board automation
-     gh secret set ANTHROPIC_AUTH_TOKEN  # AI model API key — AI review + triage
+Branch protection rules are stored in `.github/branch-protection.json` — the single
+source of truth. This file mirrors the pilot repo's proven settings: required status
+checks (lint, test, story-gate), enforce admins, dismiss stale reviews, required linear
+history, required conversation resolution, no force pushes, no deletions.
 
-   Your first story:
-     claude
-     > /story-draft "<one-paragraph feature brief>"
-     # Review the draft → confirm → issue created with story + ai-draft labels
-     # Go to the Project board → promote the card from Backlog to Ready
+If the repo is **private**, skip this phase and print:
+> Branch protection requires GitHub Pro/Team for private repos. The rules are saved
+> in `.github/branch-protection.json` — apply them manually after upgrading, or switch
+> to a public repo. The workflow's other enforcement layers (CI checks, `/start-coding`
+> gate, board automation) still work without branch protection.
 
-   Start coding:
-     > /start-coding <issue-number>
-     # Gate-checks Ready → syncs main → branches → implements → opens PR
+If the repo is **public**, confirm with the user, then apply the protection rules:
 
-   Everyday commands:
-     make lint          # must pass before pushing
-     make test          # must pass before pushing
-     /story-status <n>  # check where a story stands on the board
-   ```
+```
+gh api repos/<owner>/<repo-name>/branches/main/protection -X PUT \
+  -H "Accept: application/vnd.github+json" \
+  --input .github/branch-protection.json
+```
+
+After applying, verify:
+```
+gh api repos/<owner>/<repo-name>/branches/main/protection
+```
+
+If this fails (e.g., insufficient permissions), print the contents of
+`.github/branch-protection.json` as a manual checklist and continue.
+
+The user can customize the rules later by editing `.github/branch-protection.json`
+and re-applying with the same `gh api` command.
+
+## Phase 10 — Secrets setup
+
+Secrets are required for board automation and AI review. Walk through each one
+interactively — ask the user for the value, then set it. Do NOT skip ahead without
+asking. For each secret, explain what it is, then ask the user to provide the value
+(or say "skip" to defer).
+
+**Important:** You cannot read or echo secret values. Use `gh secret set <NAME>` which
+reads from stdin. When the user provides a value, pipe it directly:
+```
+echo "<value>" | gh secret set <NAME>
+```
+
+### 10a. PROJECT_TOKEN (required for board automation)
+
+Tell the user:
+> The board workflows need a GitHub Personal Access Token with the `project` scope to
+> move cards between statuses. Without it, the board won't update automatically.
+>
+> Create one at: **github.com → Settings → Developer settings → Personal access tokens
+> → Tokens (classic) → Generate new token**
+> - Name: something like "SDLC board automation"
+> - Scopes: check **`project`** (also **`repo`** if the repo is private)
+> - Copy the token — you won't see it again
+
+Then ask: "Paste your PROJECT_TOKEN (or type 'skip' to set it later):"
+
+- If the user provides a value: `echo "<value>" | gh secret set PROJECT_TOKEN`
+  Then verify: `gh secret list` should show `PROJECT_TOKEN`.
+- If the user says "skip": note that board automation won't work until this is set,
+  and continue.
+
+### 10b. ANTHROPIC_AUTH_TOKEN (required for AI review + triage)
+
+Tell the user:
+> The AI review and failure triage CI jobs need an API key for the AI model endpoint.
+> This is your Anthropic API key, or the token for a compatible endpoint (e.g., GLM).
+
+Then ask: "Paste your ANTHROPIC_AUTH_TOKEN (or type 'skip' to set it later):"
+
+- If the user provides a value: `echo "<value>" | gh secret set ANTHROPIC_AUTH_TOKEN`
+- If the user says "skip": note that AI review won't run until this is set.
+
+### 10c. ANTHROPIC_BASE_URL (optional — non-Anthropic endpoints only)
+
+Ask: "Are you using a non-Anthropic-compatible endpoint (e.g., GLM)? If yes, paste the
+base URL. If using Anthropic directly, type 'skip':"
+
+- If the user provides a URL: `echo "<value>" | gh secret set ANTHROPIC_BASE_URL`
+- If skip: continue.
+
+### 10d. Model overrides (optional — custom endpoints only)
+
+Only ask this if the user set ANTHROPIC_BASE_URL in 10c. Otherwise skip entirely.
+
+Ask: "Does your endpoint remap model names? If yes, provide the model IDs for each
+(or 'skip' for any you don't need):"
+
+For each one the user provides:
+- `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_SONNET_MODEL`
+- `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_HAIKU_MODEL`
+- `echo "<value>" | gh secret set ANTHROPIC_DEFAULT_OPUS_MODEL`
+
+### 10e. Summary
+
+After all secrets are handled, run `gh secret list` and show the user which secrets
+are configured. For any that were skipped, remind them:
+> To set a secret later: `gh secret set <NAME>` (paste the value when prompted).
+> Board workflows and AI review skip gracefully when secrets are missing — they
+> emit warnings but don't block CI.
+
+## Phase 11 — Verification and next steps
+
+Run final verification:
+- `gh project list --owner <owner>` — should show the board
+- `gh label list` — should show all 4 labels
+- If public: `gh api repos/<owner>/<repo>/branches/main/protection` — should return the rules
+
+Print the **"What's next"** summary:
+```
+✅ Project "<project name>" is set up with the AI-augmented SDLC framework.
+
+Secrets to configure (if not done above):
+  gh secret set PROJECT_TOKEN        # PAT with project scope — board automation
+  gh secret set ANTHROPIC_AUTH_TOKEN  # AI model API key — AI review + triage
+
+Your first story:
+  claude
+  > /story-draft "<one-paragraph feature brief>"
+  # Review the draft → confirm → issue created with story + ai-draft labels
+  # Go to the Project board → promote the card from Backlog to Ready
+
+Start coding:
+  > /start-coding <issue-number>
+  # Gate-checks Ready → syncs main → branches → implements → opens PR
+
+Everyday commands:
+  make lint          # must pass before pushing
+  make test          # must pass before pushing
+  /story-status <n>  # check where a story stands on the board
+```
 
 Never: create issues, draft stories, or start implementation during init. The setup
 is complete when the framework files are committed and the GitHub resources exist.

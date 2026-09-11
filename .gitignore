@@ -5,21 +5,15 @@ node_modules/
 *.log
 /tmp
 
-# Build artifacts — no build output is ever committed (story #1 AC1).
-# Backend (Maven)
-target/
-# Gradle (kept in case the backend ever moves to Gradle)
-.gradle/
-# Frontend (Flutter/Dart)
-.dart_tool/
-build/
-.flutter-plugins
-.flutter-plugins-dependencies
-coverage/
-# Kotlin/Gradle session data written by Android builds (frontend/android/.kotlin/)
-.kotlin/
-
 # IDE folders
 .idea/
 .vscode/
 *.iml
+
+# ADAPT: add build artifact patterns for your stack, e.g.:
+# target/        # Java/Maven
+# build/         # Gradle/Flutter
+# dist/          # Node.js
+# __pycache__/   # Python
+# .dart_tool/    # Flutter/Dart
+# coverage/      # test coverage output
