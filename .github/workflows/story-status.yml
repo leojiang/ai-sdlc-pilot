@@ -37,8 +37,11 @@ jobs:
             echo "⚠️ PROJECT_TOKEN secret not set — board status not updated"; exit 0
           fi
           NUM="${GITHUB_REF_NAME#story/}"; NUM="${NUM%%-*}"
+          if [ -z "$NUM" ]; then
+            echo "::error::branch '$GITHUB_REF_NAME' matches story/* but has no issue number"; exit 1
+          fi
           if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
-            echo "Branch '$GITHUB_REF_NAME' has no leading issue number — skipping"; exit 0
+            echo "::error::branch '$GITHUB_REF_NAME' — expected format 'story/<issue#>-slug', got '$NUM' as issue number"; exit 1
           fi
           NUM=$((10#$NUM))  # normalize zero-padded numbers for --argjson/-F
           REPO_NAME="${GITHUB_REPOSITORY#*/}"

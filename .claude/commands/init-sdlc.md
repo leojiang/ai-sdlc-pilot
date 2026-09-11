@@ -373,8 +373,11 @@ Tell the user:
 
 Then ask: "Paste your PROJECT_TOKEN (or type 'skip' to set it later):"
 
-- If the user provides a value: `echo "<value>" | gh secret set PROJECT_TOKEN`
-  Then verify: `gh secret list` should show `PROJECT_TOKEN`.
+- If the user provides a value:
+  ```
+  echo "<value>" | gh secret set PROJECT_TOKEN
+  ```
+  Then verify with `gh secret list`. If `PROJECT_TOKEN` appears in the output, confirm success. If not, show an error: "Failed to set PROJECT_TOKEN — please check the value and try again."
 - If the user says "skip": note that board automation won't work until this is set,
   and continue.
 
@@ -386,8 +389,12 @@ Tell the user:
 
 Then ask: "Paste your ANTHROPIC_AUTH_TOKEN (or type 'skip' to set it later):"
 
-- If the user provides a value: `echo "<value>" | gh secret set ANTHROPIC_AUTH_TOKEN`
-- If the user says "skip": note that AI review won't run until this is set.
+- If the user provides a value:
+  ```
+  echo "<value>" | gh secret set ANTHROPIC_AUTH_TOKEN
+  ```
+  Then verify with `gh secret list`. If `ANTHROPIC_AUTH_TOKEN` appears, confirm success. If not, show an error and ask them to try again.
+- If the user says "skip": note that AI review and triage won't run until this is set.
 
 ### 10c. ANTHROPIC_BASE_URL (optional — non-Anthropic endpoints only)
 
