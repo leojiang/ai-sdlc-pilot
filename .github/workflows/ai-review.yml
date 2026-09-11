@@ -30,6 +30,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
       COMMENT_BODY: ${{ github.event.comment.body }}
+      OWNER: ${{ github.repository_owner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,6 +45,16 @@ jobs:
         env:
           WS: ${{ github.workspace }}
         run: printf '{"projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$WS" > "$HOME/.claude.json"
+
+      - name: Fork guard
+        run: |
+          set -euo pipefail
+          HEAD_OWNER=$(gh pr view "$PR_NUMBER" --json headRepositoryOwner -q .headRepositoryOwner.login)
+          if [ "$HEAD_OWNER" != "$OWNER" ]; then
+            echo "⚠️ PR #$PR_NUMBER originates from fork $HEAD_OWNER — refusing to run the agent on untrusted content." > review.md
+            exit 0
+          fi
+          echo "✅ PR #$PR_NUMBER is from the main repo — proceeding with review"
 
       - name: Build the review prompt
         run: |
@@ -63,19 +74,12 @@ jobs:
           ANTHROPIC_DEFAULT_SONNET_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_SONNET_MODEL }}
           ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_HAIKU_MODEL }}
           ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_OPUS_MODEL }}
-          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
+          [ -f review.md ] && exit 0
           if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ]; then
             echo "::warning::AI review skipped: ANTHROPIC_AUTH_TOKEN secret not set — AI-review gate OPEN (no review comments will be posted)"
             echo "⚠️ AI review skipped: ANTHROPIC_AUTH_TOKEN secret not set" > review.md
-            exit 0
-          fi
-          # Prompt-injection guard: never feed fork-authored content to the agent,
-          # regardless of who triggered the run (defends the @claude comment path too).
-          HEAD_OWNER=$(gh pr view "$PR_NUMBER" --json headRepositoryOwner -q .headRepositoryOwner.login)
-          if [ "$HEAD_OWNER" != "$OWNER" ]; then
-            echo "⚠️ AI review skipped: PR #$PR_NUMBER originates from fork $HEAD_OWNER — refusing to run the agent on untrusted content." > review.md
             exit 0
           fi
           # Tool grants mirror scripts/ai-review.sh exactly — the check-ai-review-tools
