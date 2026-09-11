@@ -156,7 +156,7 @@ jobs:
       - name: Heal-filter fixtures (story-done board sweep)
         run: |
           set -euo pipefail
-          OUT=$(jq -r --arg repo "leojiang/ai-sdlc-pilot" --arg f "Status" --arg done "Done" -f scripts/heal-filter.jq scripts/heal-filter.fixture.json)
+          OUT=$(jq -r --arg repo "test-owner/test-repo" --arg f "Status" --arg done "Done" -f scripts/heal-filter.jq scripts/heal-filter.fixture.json)
           # Two should-matches: a below-Done card AND a no-status card (terminal
           # policy: closed+completed means Done however it's carded); five negatives
           EXPECTED=$(printf 'HEAL_THIS\t42\nNO_STATUS\t48')

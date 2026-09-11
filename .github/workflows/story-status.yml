@@ -120,7 +120,7 @@ jobs:
             fi
           else
             # Ready gate: no board card means the story was never human-promoted
-            echo "issue #$NUM has no board card — add it to the SDLC Pilot board and promote it to Ready before implementation"; exit 0
+            echo "issue #$NUM has no board card — add it to the '$PROJECT_TITLE' board and promote it to Ready before implementation"; exit 0
           fi
           # Update every matching item (guards against historical double-adds)
           while IFS=$'\t' read -r ITEM _CUR; do
